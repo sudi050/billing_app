@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>🎟️ Manage Coupons</h2>
+        <a href="{{ url_for('add_coupon') }}" class="btn btn-success">➕ Add New Coupon</a>
+    </div>
+
+    {% if coupons %}
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Type</th>
+                            <th>Details</th>
+                            <th>Min Amount</th>
+                            <th>Usage</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for coupon in coupons %}
+                        <tr>
+                            <td><strong>{{ coupon.code }}</strong></td>
+                            <td>
+                                {% if coupon.discount_type == 'percent' %}
+                                <span class="badge bg-primary">Percent</span>
+                                {% elif coupon.discount_type == 'flat' %}
+                                <span class="badge bg-success">Flat</span>
+                                {% elif coupon.discount_type == 'bogo' %}
+                                <span class="badge bg-warning text-dark">BOGO</span>
+                                {% elif coupon.discount_type == 'frequency' %}
+                                <span class="badge bg-info">Frequency</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if coupon.discount_type == 'percent' %}
+                                {{ coupon.value }}% off (max ₹{{ coupon.max_discount or '∞' }})
+
+                                {% elif coupon.discount_type == 'flat' %}
+                                ₹{{ coupon.value }} off
+
+                                {% elif coupon.discount_type == 'bogo' %}
+                                Buy {{ coupon.bogo_buy_quantity }} Get {{ coupon.bogo_get_quantity }} Free
+
+                                {% elif coupon.discount_type == 'frequency' %}
+                                {{ coupon.frequency_discount_percent }}% on every {{ coupon.frequency_nth_order }}th order
+                                {% endif %}
+                            </td>
+                            <td>₹{{ coupon.min_amount }}</td>
+                            <td>
+                                {{ coupon.current_uses }} 
+                                {% if coupon.max_uses %}
+                                / {{ coupon.max_uses }}
+                                {% else %}
+                                / ∞
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if coupon.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('edit_coupon', id=coupon.id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    ✏️ Edit
+                                </a>
+                                <a href="{{ url_for('toggle_coupon', id=coupon.id) }}" 
+                                   class="btn btn-sm btn-warning">
+                                    {% if coupon.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </a>
+                                <a href="{{ url_for('delete_coupon', id=coupon.id) }}" 
+                                   class="btn btn-sm btn-danger"
+                                   onclick="return confirm('Delete this coupon?')">
+                                    Delete
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <h4>No Coupons Yet</h4>
+        <p>Create your first coupon to offer discounts to customers!</p>
+        <a href="{{ url_for('add_coupon') }}" class="btn btn-success">Create Coupon</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.table td {
+    vertical-align: middle;
+}
+</style>
+{% endblock %}

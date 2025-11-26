@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📋 Order Details #{{ order.order_number }}</h2>
+        <a href="{{ url_for('admin_orders') }}" class="btn btn-secondary">← Back to Orders</a>
+    </div>
+
+    <div class="row">
+        <!-- Order Info -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Order Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th>Order Number:</th>
+                            <td>#{{ order.order_number }}</td>
+                        </tr>
+                        <tr>
+                            <th>Table Number:</th>
+                            <td>{{ order.table_no }}</td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                <span class="badge bg-{{ 'warning' if order.status=='pending' else 'success' if order.status=='served' else 'secondary' }}">
+                                    {{ order.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Created:</th>
+                            <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        </tr>
+                        <tr>
+                            <th>UUID:</th>
+                            <td><small>{{ order.uuid }}</small></td>
+                        </tr>
+                        {% if order.customer_mobile %}
+                        <tr>
+                            <th>Customer Mobile:</th>
+                            <td>{{ order.customer_mobile }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coupon/Discount Info -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Pricing Details</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th>Subtotal:</th>
+                            <td>₹{{ "%.2f"|format(subtotal) }}</td>
+                        </tr>
+                        {% if order.coupon_code %}
+                        <tr>
+                            <th>Coupon:</th>
+                            <td><span class="badge bg-warning">{{ order.coupon_code }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Discount:</th>
+                            <td class="text-danger">-₹{{ "%.2f"|format(discount) }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="table-success">
+                            <th>Total:</th>
+                            <th>₹{{ "%.2f"|format(total) }}</th>
+                        </tr>
+                    </table>
+
+                    {% if bill %}
+                    <hr>
+                    <div class="alert alert-success">
+                        <strong>✓ Billed</strong><br>
+                        Bill #{{ bill.id }} generated on {{ bill.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        <br>
+                        <a href="{{ url_for('admin_bill_details', bill_id=bill.id) }}" class="btn btn-sm btn-success mt-2">View Bill</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Items -->
+    <div class="card mt-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">Order Items</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th class="text-center">Quantity</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td class="text-center">{{ item.qty }}</td>
+                        <td class="text-end">₹{{ "%.2f"|format(item.price) }}</td>
+                        <td class="text-end">₹{{ "%.2f"|format(item.qty * item.price) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-light">
+                        <th colspan="3" class="text-end">Subtotal:</th>
+                        <th class="text-end">₹{{ "%.2f"|format(subtotal) }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h4 class="mb-3">Kitchen Orders</h4>
+
+{% if orders %}
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle">
+    <thead class="table-primary">
+      <tr>
+        <th>Order ID</th>
+        <th>Table</th>
+        <th>Items</th>
+        <th>Status</th>
+        <th>Time</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for order in orders %}
+      <tr>
+        <td>#{{ order.id }}</td>
+        <td>{{ order.table_no }}</td>
+        <td>
+          {% set items = order.items | safe %}
+          {% if items %}
+            {% set parsed = items | tojson | safe %}
+          {% endif %}
+          <pre class="small bg-light p-2 rounded" style="white-space: pre-wrap;">{{ order.items }}</pre>
+        </td>
+        <td>
+          <span class="badge bg-warning text-dark">{{ order.status|capitalize }}</span>
+        </td>
+        <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('serve_order', order_id=order.id) }}" onsubmit="return confirm('Mark this order as served?')">
+            <button type="submit" class="btn btn-success btn-sm">Mark Served</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info text-center">
+  No pending orders at the moment.
+</div>
+{% endif %}
+
+{% endblock %}

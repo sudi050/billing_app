@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Customer: {{ customer.name }}</h2>
+        <a href="{{ url_for('admin_customers') }}" class="btn btn-secondary">← Back</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Customer Info</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Name:</strong> {{ customer.name }}</p>
+                    <p><strong>Phone:</strong> {{ customer.phone }}</p>
+                    <p><strong>Total Orders:</strong> {{ customer.total_visits }}</p>
+                    <p><strong>Total Spent:</strong> ₹{{ "%.2f"|format(customer.total_spent) }}</p>
+                    <p><strong>Last Visit:</strong> {{ customer.last_visit.strftime('%d-%b-%Y %H:%M') if customer.last_visit else 'N/A' }}</p>
+                    <p><strong>Joined:</strong> {{ customer.created_at.strftime('%d-%b-%Y') }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Order History</h5>
+                </div>
+                <div class="card-body">
+                    {% if bills %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Bill ID</th>
+                                    <th>Table</th>
+                                    <th>Total</th>
+                                    <th>Discount</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bill in bills %}
+                                <tr>
+                                    <td>#{{ bill.id }}</td>
+                                    <td>{{ bill.table_no }}</td>
+                                    <td>₹{{ "%.2f"|format(bill.total) }}</td>
+                                    <td>₹{{ "%.2f"|format(bill.discount) }}</td>
+                                    <td>{{ bill.created_at.strftime('%d-%b %H:%M') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('admin_bill_details', bill_id=bill.id) }}" 
+                                           class="btn btn-sm btn-info">View</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p>No order history.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

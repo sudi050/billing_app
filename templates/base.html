@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title if title else 'Restaurant Portal' }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container-fluid">
+        <a class="navbar-brand fw-bold text-white me-4" href="#">Restaurant Portal</a>
+
+        <div class="d-flex gap-3">
+            <a class="nav-link text-white" href="{{ url_for('billing') }}">Billing</a>
+            <a class="nav-link text-white" href="{{ url_for('waiter') }}">Take Order</a>
+            <a class="nav-link text-white" href="{{ url_for('kitchen') }}">Kitchen</a>
+            <a class="nav-link text-white" href="{{ url_for('admin_dashboard') }}">Admin</a>
+        </div>
+
+            <span class="navbar-text text-white">{{ role|capitalize }} Panel</span>
+            <div class="d-flex ms-auto">
+                <a href="{{ url_for('logout') }}" class="btn btn-light btn-sm">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+
+    <div class="container mt-4 mb-5">
+        {% block content %}{% endblock %}
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

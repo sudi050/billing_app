@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📋 All Orders</h2>
+        <a href="{{ url_for('export_orders') }}" class="btn btn-success">📥 Export CSV</a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Date</label>
+                    <input type="date" name="date" class="form-control" value="{{ date_filter or '' }}">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Table</label>
+                    <select name="table" class="form-select">
+                        <option value="">All Tables</option>
+                        {% for table_no in table_numbers %}
+                        <option value="{{ table_no }}" {{ 'selected' if table_filter==table_no }}>Table {{ table_no }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="pending" {{ 'selected' if status_filter=='pending' }}>Pending</option>
+                        <option value="served" {{ 'selected' if status_filter=='served' }}>Served</option>
+                        <option value="billed" {{ 'selected' if status_filter=='billed' }}>Billed</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">🔍 Filter</button>
+                    <a href="{{ url_for('admin_orders') }}" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="card">
+        <div class="card-body">
+            <p class="text-muted">Showing {{ orders|length }} orders</p>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Order #</th>
+                            <th>Table</th>
+                            <th>Items</th>
+                            <th>Status</th>
+                            <th>Coupon</th>
+                            <th>Discount</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td><strong>#{{ order.order_number }}</strong></td>
+                            <td>{{ order.table_no }}</td>
+                            <td>
+                                {% set items = order.items|from_json %}
+                                {{ items|length }} items
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'warning' if order.status=='pending' else 'success' if order.status=='served' else 'secondary' }}">
+                                    {{ order.status }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if order.coupon_code %}
+                                <span class="badge bg-info">{{ order.coupon_code }}</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>₹{{ "%.2f"|format(order.discount_amount or 0) }}</td>
+                            <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <a href="{{ url_for('admin_order_details', order_id=order.id) }}" class="btn btn-sm btn-primary">
+                                    View Details
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">No orders found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

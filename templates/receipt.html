@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="receipt-body">
+    <div class="receipt">
+        <h4 class="text-center">Restaurant Name</h4>
+        <p>Date: {{ date }}<br>Bill No: {{ bill_no }}</p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>₹{{ item.price }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <h5 class="text-end">Total: ₹{{ total }}</h5>
+        {% if discount %}<p>Discount: ₹{{ discount }}</p>{% endif %}
+        <p class="text-center">Thank you! Visit again!</p>
+    </div>
+</body>
+
+</html>

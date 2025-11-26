@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h3>Waiter Panel</h3>
+
+  <!-- Table selection -->
+  <form method="get" action="{{ url_for('waiter') }}">
+    <label>Select Table:</label>
+    <select name="table_id" onchange="this.form.submit()" class="form-select" style="width:auto;display:inline-block;">
+      <option value="">-- Select Table --</option>
+      {% for table in tables %}
+        <option value="{{ table.id }}" {% if selected_table and table.id == selected_table.id %}selected{% endif %}>
+          {{ table.table_no }} {% if table.locked %}(Locked){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if selected_table %}
+  <hr>
+  <h5>Table {{ selected_table.table_no }} - {{ selected_table.status|capitalize }}</h5>
+
+  <!-- Cart display -->
+  {% if cart %}
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Qty</th>
+        <th>Price</th>
+        <th>Total</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cart %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ c.qty }}</td>
+        <td>{{ c.price }}</td>
+        <td>{{ "%.2f"|format(c.price * c.qty) }}</td>
+        <td>
+          <form method="post" style="display:inline;">
+            <input type="hidden" name="table_id" value="{{ selected_table.id }}">
+            <button class="btn btn-danger btn-sm" name="remove_item" value="{{ c.id }}">X</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p>No items in cart yet.</p>
+  {% endif %}
+
+  <hr>
+  <h5>Menu</h5>
+
+  <div class="accordion" id="menuAccordion">
+    {% for category, items in menu_by_category.items() %}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="heading{{ loop.index }}">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+          data-bs-target="#collapse{{ loop.index }}" aria-expanded="false" aria-controls="collapse{{ loop.index }}">
+          {{ category }}
+        </button>
+      </h2>
+      <div id="collapse{{ loop.index }}" class="accordion-collapse collapse"
+        aria-labelledby="heading{{ loop.index }}" data-bs-parent="#menuAccordion">
+        <div class="accordion-body">
+          <div class="row">
+            {% for item in items %}
+            <div class="col-md-4 mb-2">
+              <div class="card">
+                <div class="card-body">
+                  <h6 class="card-title">{{ item.name }}</h6>
+                  <p>₹{{ item.price }}</p>
+                  <form method="post">
+                    <input type="hidden" name="table_id" value="{{ selected_table.id }}">
+                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                    <input type="number" name="qty" value="1" min="1" class="form-control mb-1" style="width:80px;">
+                    <button type="submit" name="add_item" class="btn btn-sm btn-success">Add</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

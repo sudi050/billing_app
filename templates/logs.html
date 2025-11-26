@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="mb-3">System Logs</h4>
+
+<form method="GET" action="{{ url_for('logs') }}" class="row g-3 align-items-center mb-4">
+    <div class="col-md-4">
+        <label class="form-label">Filter by Date</label>
+        <input type="date" name="date" value="{{ selected_date }}" class="form-control">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Filter by Role</label>
+        <select name="role" class="form-select">
+            <option value="">All</option>
+            <option value="waiter" {% if selected_role == 'waiter' %}selected{% endif %}>Waiter</option>
+            <option value="billing" {% if selected_role == 'billing' %}selected{% endif %}>Billing</option>
+            <option value="admin" {% if selected_role == 'admin' %}selected{% endif %}>Admin</option>
+        </select>
+    </div>
+    <div class="col-md-4 d-flex align-items-end">
+        <button class="btn btn-primary me-2">Filter</button>
+        <a href="{{ url_for('export_logs') }}" class="btn btn-outline-secondary">Export</a>
+    </div>
+</form>
+
+<table class="table table-striped table-hover table-sm">
+    <thead class="table-light">
+        <tr>
+            <th>Timestamp</th>
+            <th>User</th>
+            <th>Role</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.timestamp }}</td>
+            <td>{{ log.username }}</td>
+            <td>{{ log.role|capitalize }}</td>
+            <td>{{ log.action }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted">No logs found</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

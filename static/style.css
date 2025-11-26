@@ -1,0 +1,62 @@
+:root {
+--theme-color: #0077b6;
+}
+
+
+body {
+background-color: #f8f9fa;
+font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+
+.bg-primary {
+background-color: var(--theme-color) !important;
+}
+
+
+.btn-primary {
+background-color: var(--theme-color);
+border-color: var(--theme-color);
+}
+
+
+.btn-primary:hover {
+background-color: #005f8d;
+border-color: #005f8d;
+}
+
+
+.card {
+border-radius: 10px;
+}
+
+
+.table th, .table td {
+vertical-align: middle;
+}
+
+
+.receipt-body {
+background: #fff;
+font-size: 14px;
+width: 100%;
+}
+
+
+.receipt {
+max-width: 300px;
+margin: 0 auto;
+padding: 10px;
+border: 1px dashed #000;
+}
+
+
+.receipt h4 {
+margin-bottom: 10px;
+}
+
+
+.btn, .form-control, .form-select {
+font-size: 1rem;
+padding: 0.6rem;
+}

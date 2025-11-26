@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>➕ Create New Coupon</h2>
+        <a href="{{ url_for('admin_coupons') }}" class="btn btn-secondary">← Back to Coupons</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST">
+                <!-- Basic Info -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Coupon Code *</label>
+                        <input type="text" name="code" class="form-control" required 
+                               placeholder="e.g., SAVE20" style="text-transform:uppercase">
+                        <small class="text-muted">Uppercase letters and numbers only</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Discount Type *</label>
+                        <select name="discount_type" id="discountType" class="form-select" required>
+                            <option value="">-- Select Type --</option>
+                            <option value="percent">Percent Discount (e.g., 20% off)</option>
+                            <option value="flat">Flat Discount (e.g., ₹50 off)</option>
+                            <option value="bogo">BOGO (Buy X Get Y Free)</option>
+                            <option value="frequency">Frequency (Every Nth order)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Percent Fields -->
+                <div id="percentFields" class="coupon-fields" style="display:none">
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h5>Percent Discount Settings</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Discount Percentage *</label>
+                                    <input type="number" name="value" class="form-control" 
+                                           min="1" max="100" placeholder="e.g., 20">
+                                    <small class="text-muted">1-100%</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Max Discount Cap (Optional)</label>
+                                    <input type="number" name="max_discount" class="form-control" 
+                                           min="0" step="0.01" placeholder="e.g., 500">
+                                    <small class="text-muted">Maximum ₹ discount allowed</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Flat Fields -->
+                <div id="flatFields" class="coupon-fields" style="display:none">
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h5>Flat Discount Settings</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Discount Amount *</label>
+                                    <input type="number" name="value" class="form-control" 
+                                           min="1" step="0.01" placeholder="e.g., 50">
+                                    <small class="text-muted">Fixed ₹ amount</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOGO Fields -->
+                <div id="bogoFields" class="coupon-fields" style="display:none">
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h5>BOGO Settings</h5>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Buy Quantity *</label>
+                                    <input type="number" name="bogo_buy" class="form-control" 
+                                           min="1" value="1" placeholder="e.g., 1">
+                                    <small class="text-muted">Customer must buy this many</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Get Quantity *</label>
+                                    <input type="number" name="bogo_get" class="form-control" 
+                                           min="1" value="1" placeholder="e.g., 1">
+                                    <small class="text-muted">Customer gets this many free</small>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-12">
+                                    <label class="form-label">Applicable Items *</label>
+                                    <select name="bogo_items[]" class="form-select" multiple size="8" required>
+                                        {% for item in menu_items %}
+                                        <option value="{{ item.id }}">{{ item.name }} - ₹{{ item.price }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Hold Ctrl/Cmd to select multiple items</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Frequency Fields -->
+                <div id="frequencyFields" class="coupon-fields" style="display:none">
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h5>Frequency Settings</h5>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Every Nth Order *</label>
+                                    <input type="number" name="frequency_nth" class="form-control" 
+                                           min="2" value="5" placeholder="e.g., 5">
+                                    <small class="text-muted">Apply discount on every Nth order</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Discount Percentage *</label>
+                                    <input type="number" name="frequency_percent" class="form-control" 
+                                           min="1" max="100" value="20" placeholder="e.g., 20">
+                                    <small class="text-muted">Discount % for eligible orders</small>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Max Discount Cap (Optional)</label>
+                                    <input type="number" name="max_discount" class="form-control" 
+                                           min="0" step="0.01" placeholder="e.g., 500">
+                                    <small class="text-muted">Maximum ₹ discount allowed</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Common Fields -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Minimum Order Amount</label>
+                        <input type="number" name="min_amount" class="form-control" 
+                               min="0" step="0.01" value="0" placeholder="e.g., 200">
+                        <small class="text-muted">Minimum cart value required</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Max Total Uses (Optional)</label>
+                        <input type="number" name="max_uses" class="form-control" 
+                               min="0" placeholder="e.g., 100">
+                        <small class="text-muted">Leave empty for unlimited</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_active" class="form-check-input" 
+                                   id="isActive" checked>
+                            <label class="form-check-label" for="isActive">
+                                Activate coupon immediately
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('admin_coupons') }}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-success">Create Coupon</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('discountType').addEventListener('change', function() {
+    // Hide all coupon fields
+    document.querySelectorAll('.coupon-fields').forEach(el => el.style.display = 'none');
+
+    // Show selected type fields
+    const type = this.value;
+    if (type === 'percent') {
+        document.getElementById('percentFields').style.display = 'block';
+    } else if (type === 'flat') {
+        document.getElementById('flatFields').style.display = 'block';
+    } else if (type === 'bogo') {
+        document.getElementById('bogoFields').style.display = 'block';
+    } else if (type === 'frequency') {
+        document.getElementById('frequencyFields').style.display = 'block';
+    }
+});
+</script>
+
+<style>
+.card.bg-light {
+    border-left: 4px solid #007bff;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📊 Admin Dashboard</h2>
+        <div>
+            <input type="date" id="dateFilter" class="form-control" value="{{ selected_date or '' }}" 
+                   onchange="window.location.href='/admin?date=' + this.value">
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row">
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h5 class="card-title">💰 Total Revenue</h5>
+                    <h2>₹{{ "%.2f"|format(total_revenue) }}</h2>
+                    <small>{{ total_bills }} bills</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h5 class="card-title">📦 Total Orders</h5>
+                    <h2>{{ total_orders }}</h2>
+                    <small>Pending: {{ pending_orders }}</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h5 class="card-title">🎟️ Discounts Given</h5>
+                    <h2>₹{{ "%.2f"|format(total_discount) }}</h2>
+                    <small>Total savings</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h5 class="card-title">🪑 Active Tables</h5>
+                    <h2>{{ active_tables }}</h2>
+                    <small>/ {{ total_tables }} tables</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('admin_orders') }}" class="btn btn-outline-primary">📋 View All Orders</a>
+                <a href="{{ url_for('admin_bills') }}" class="btn btn-outline-success">💵 View All Bills</a>
+                <a href="{{ url_for('logs') }}" class="btn btn-outline-info">📜 System Logs</a>
+                <a href="{{ url_for('admin_menu') }}" class="btn btn-outline-warning">🍽️ Manage Menu</a>
+                <a href="{{ url_for('admin_coupons') }}" class="btn btn-outline-secondary">🏷️ Manage Coupons</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Tabs -->
+    <ul class="nav nav-tabs" id="activityTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" data-bs-toggle="tab" href="#orders">Recent Orders</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#bills">Recent Bills</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#logs">Recent Activity</a>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        <!-- Recent Orders -->
+        <div class="tab-pane fade show active" id="orders">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Order #</th>
+                        <th>Table</th>
+                        <th>Status</th>
+                        <th>Time</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in recent_orders %}
+                    <tr>
+                        <td>#{{ order.order_number }}</td>
+                        <td>{{ order.table_no }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'warning' if order.status=='pending' else 'success' if order.status=='served' else 'secondary' }}">
+                                {{ order.status }}
+                            </span>
+                        </td>
+                        <td>{{ order.created_at.strftime('%H:%M:%S') }}</td>
+                        <td>
+                            <a href="{{ url_for('admin_order_details', order_id=order.id) }}" class="btn btn-sm btn-primary">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Recent Bills -->
+        <div class="tab-pane fade" id="bills">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Bill #</th>
+                        <th>Table</th>
+                        <th>Total</th>
+                        <th>Time</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bill in recent_bills %}
+                    <tr>
+                        <td>#{{ bill.id }}</td>
+                        <td>{{ bill.table_no }}</td>
+                        <td>₹{{ "%.2f"|format(bill.total) }}</td>
+                        <td>{{ bill.created_at.strftime('%H:%M:%S') }}</td>
+                        <td>
+                            <a href="{{ url_for('admin_bill_details', bill_id=bill.id) }}" class="btn btn-sm btn-success">View</a>
+                            <a href="{{ url_for('view_bill', bill_id=bill.id) }}" class="btn btn-sm btn-info">Print</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="tab-pane fade" id="logs">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>User</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                    <tr>
+                        <td>{{ log.timestamp.strftime('%H:%M:%S') }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'danger' if log.role=='admin' else 'warning' if log.role=='waiter' else 'info' }}">
+                                {{ log.username }}
+                            </span>
+                        </td>
+                        <td>{{ log.action }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>👥 Customers</h2>
+    </div>
+
+    {% if customers %}
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Total Orders</th>
+                            <th>Total Spent</th>
+                            <th>Last Visit</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for customer in customers %}
+                        <tr>
+                            <td>{{ customer.name }}</td>
+                            <td>{{ customer.phone }}</td>
+                            <td>{{ customer.total_visits }}</td>
+                            <td>₹{{ "%.2f"|format(customer.total_spent) }}</td>
+                            <td>{{ customer.last_visit.strftime('%d-%b-%Y') if customer.last_visit else 'N/A' }}</td>
+                            <td>
+                                <a href="{{ url_for('admin_customer_details', customer_id=customer.id) }}" 
+                                   class="btn btn-sm btn-info">View Details</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        No customers yet.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
