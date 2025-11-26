@@ -21,7 +21,6 @@ CLOUD_MODE = os.environ.get('CLOUD_MODE', 'False').lower() == 'true'
 
 # Printer configuration (only for local mode)
 PRINTER_ENABLED = not CLOUD_MODE
-BLUETOOTH_PRINTER_MAC = os.environ.get('PRINTER_MAC', '00:11:22:33:44:55')  # HOP-HL58 MAC address
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'change-this-secret')
@@ -39,7 +38,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 PRINTER_ENABLED = True
-BLUETOOTH_PRINTER_MAC = "00:11:22:33:44:55"  # Your HOP-HL58 MAC
+BLUETOOTH_PRINTER_MAC = "10:22:33:D0:C7:3A"  # Your HOP-HL58 MAC
 
 @app.route('/print_kot/<int:table_id>', methods=['POST'])
 @login_required

@@ -1,116 +1,87 @@
 import os
 import json
-import subprocess
-import shutil
 from datetime import datetime
 from models import db, Order, PrintJob, current_time_ist, Bill
 
 PRINTER_ENABLED = True
 
-# RawBT package names (try both common variants)
-RAWBT_PACKAGES = [
-    'ru.a402d.rawbtprinter',  # Most common
-    'com.mmm.rawbt',           # Alternative
-]
+# ========== PRINTER CONFIGURATION ==========
+PRINTER_MAC = "10:22:33:D0:C7:3A"  # REPLACE WITH YOUR PRINTER'S MAC ADDRESS
 
-# ========== UTILITY: Send text directly to RawBT ==========
-def send_to_rawbt_direct(text_content):
+# To find your printer's MAC address, run in Termux:
+# bluetoothctl
+# scan on
+# (note the MAC address of your printer)
+# pair XX:XX:XX:XX:XX:XX
+# trust XX:XX:XX:XX:XX:XX
+
+# ========== DIRECT BLUETOOTH PRINTING ==========
+def print_bluetooth_direct(text_content):
     """
-    Send text content directly to RawBT app via Android intent.
-    No file needed!
+    Print directly to Bluetooth thermal printer using python-escpos.
+    No user interaction needed - fully automatic!
     
     Returns:
         (success: bool, message: str)
     """
-    # Method 1: Try termux-share with text content (BEST METHOD)
-    termux_share = shutil.which('termux-share')
-    if termux_share:
-        try:
-            print(f"🔄 Sending directly via termux-share...")
-            result = subprocess.run([
-                termux_share,
-                '-a', 'send',
-                '-t', 'text/plain'
-            ], input=text_content, text=True, capture_output=True, timeout=3)
-            
-            if result.returncode == 0:
-                return True, "✅ Sent to RawBT (select from share menu)"
-            print(f"termux-share error: {result.stderr}")
-        except Exception as e:
-            print(f"termux-share failed: {e}")
-    
-    # Method 2: Android AM broadcast with text extra
-    am_path = shutil.which('am') or '/system/bin/am'
-    if os.path.exists(am_path):
-        for package in RAWBT_PACKAGES:
-            try:
-                print(f"🔄 Trying direct intent to {package}...")
-                # Send text directly via intent extra
-                result = subprocess.run([
-                    am_path, 'start',
-                    '-a', 'android.intent.action.SEND',
-                    '-t', 'text/plain',
-                    '--es', 'android.intent.extra.TEXT', text_content,
-                    '-n', f'{package}/.ActivityPrint'
-                ], capture_output=True, timeout=3, text=True)
-                
-                if result.returncode == 0:
-                    return True, f"✅ Sent directly to RawBT ({package})"
-                print(f"{package} failed: {result.stderr}")
-            except Exception as e:
-                print(f"{package} error: {e}")
-        
-        # Try generic share intent (will show app chooser)
-        try:
-            print(f"🔄 Trying generic share intent...")
-            result = subprocess.run([
-                am_path, 'start',
-                '-a', 'android.intent.action.SEND',
-                '-t', 'text/plain',
-                '--es', 'android.intent.extra.TEXT', text_content
-            ], capture_output=True, timeout=3, text=True)
-            
-            if result.returncode == 0:
-                return True, "✅ Opening share menu - Select RawBT"
-        except Exception as e:
-            print(f"Generic share failed: {e}")
-    
-    # Fallback: Save to accessible location as backup
-    return save_as_fallback(text_content)
-
-
-def save_as_fallback(text_content):
-    """Fallback: Save to Downloads folder for manual printing."""
     try:
-        download_path = '/storage/emulated/0/Download/RestaurantPrints'
-        os.makedirs(download_path, exist_ok=True)
+        # Import escpos library
+        from escpos.printer import Bluetooth
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filepath = os.path.join(download_path, f'print_{timestamp}.txt')
+        print(f"🔄 Connecting to printer at {PRINTER_MAC}...")
         
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(text_content)
+        # Connect to printer
+        printer = Bluetooth(PRINTER_MAC)
         
-        return True, f"📄 Saved to Downloads/RestaurantPrints\nOpen with RawBT to print"
+        print(f"✅ Connected! Sending print job...")
+        
+        # Send text content
+        printer.text(text_content)
+        
+        # Cut paper
+        printer.cut()
+        
+        # Close connection
+        printer.close()
+        
+        print(f"✅ Print job completed successfully!")
+        
+        return True, "✅ Printed successfully"
+        
+    except ImportError:
+        error_msg = (
+            "❌ python-escpos not installed!\n"
+            "Install it with: pip install python-escpos"
+        )
+        print(error_msg)
+        return False, error_msg
+        
     except Exception as e:
-        # Last resort: save to app folder
-        os.makedirs('prints', exist_ok=True)
-        filepath = f'prints/print_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(text_content)
-        return True, f"📄 Saved to {filepath}"
+        error_msg = f"❌ Print error: {str(e)}"
+        print(error_msg)
+        
+        # Common error messages and solutions
+        if "Connection refused" in str(e):
+            return False, "❌ Printer not paired or turned off. Check Bluetooth settings."
+        elif "No such device" in str(e):
+            return False, f"❌ Printer {PRINTER_MAC} not found. Check MAC address."
+        elif "Permission denied" in str(e):
+            return False, "❌ Bluetooth permission denied. Grant Termux location permission."
+        else:
+            return False, error_msg
 
 
 # ======= KITCHEN ORDER FUNCTIONS (KOT) =======
 def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
     """
-    Send KOT directly to RawBT.
+    Print KOT directly to Bluetooth printer.
+    Fully automatic - no user interaction!
     """
     print(f"\n{'='*50}")
     print(f"🍳 PRINTING KOT - Kitchen {kitchen_number} - Order #{order_number}")
     print(f"{'='*50}")
     
-    success, message = send_to_rawbt_direct(kot_content)
+    success, message = print_bluetooth_direct(kot_content)
     
     print(f"Result: {message}")
     print(f"{'='*50}\n")
@@ -152,12 +123,15 @@ def format_kot_content(order: Order, items: list) -> str:
 
 # ================ BILL PRINTING FUNCTIONS =====================
 def print_bill_rawbt(bill_content, bill_id):
-    """Send bill directly to RawBT."""
+    """
+    Print bill directly to Bluetooth printer.
+    Fully automatic - no user interaction!
+    """
     print(f"\n{'='*50}")
     print(f"💳 PRINTING BILL - Bill #{bill_id}")
     print(f"{'='*50}")
     
-    success, message = send_to_rawbt_direct(bill_content)
+    success, message = print_bluetooth_direct(bill_content)
     
     print(f"Result: {message}")
     print(f"{'='*50}\n")
@@ -288,12 +262,20 @@ def create_bill_print_job(bill_id: int):
 # ======================= SELF-TEST ============================
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🔍 RAWBT DIRECT PRINT TEST")
+    print("🖨️  BLUETOOTH PRINTER DIRECT TEST")
     print("="*60)
     
-    print("\n📱 Environment:")
-    print(f"   termux-share: {shutil.which('termux-share')}")
-    print(f"   am: {shutil.which('am') or '/system/bin/am'}")
+    print(f"\n📱 Configuration:")
+    print(f"   Printer MAC: {PRINTER_MAC}")
+    
+    try:
+        from escpos.printer import Bluetooth
+        print(f"   python-escpos: ✅ Installed")
+    except ImportError:
+        print(f"   python-escpos: ❌ NOT INSTALLED")
+        print(f"\n⚠️  Install with: pip install python-escpos")
+        print("="*60 + "\n")
+        exit(1)
     
     # Test KOT
     print("\n" + "="*60)
@@ -314,10 +296,29 @@ QTY  ITEM
 
 ================================
 *** PREPARE THIS ORDER ***
+
+
 """
     
-    s1, m1 = send_to_rawbt_direct(test_kot)
-    print(f"\n✅ KOT Test Result: {m1}")
+    s1, m1 = print_bluetooth_direct(test_kot)
+    print(f"\n{'✅' if s1 else '❌'} KOT Test Result: {m1}")
+    
+    if not s1:
+        print("\n" + "="*60)
+        print("❌ TEST FAILED - TROUBLESHOOTING")
+        print("="*60)
+        print("\n1. Check printer is turned ON")
+        print("2. Check Bluetooth is enabled")
+        print("3. Pair printer with:")
+        print("   bluetoothctl")
+        print("   scan on")
+        print("   pair XX:XX:XX:XX:XX:XX")
+        print("   trust XX:XX:XX:XX:XX:XX")
+        print("   connect XX:XX:XX:XX:XX:XX")
+        print("\n4. Update PRINTER_MAC at the top of this file")
+        print("5. Grant Termux location permission (needed for Bluetooth)")
+        print("="*60 + "\n")
+        exit(1)
     
     # Test Bill
     print("\n" + "="*60)
@@ -346,15 +347,17 @@ TOTAL:                  350.00
 
     THANK YOU!
   PLEASE VISIT AGAIN!
+
+
 """
     
-    s2, m2 = send_to_rawbt_direct(test_bill)
-    print(f"\n✅ Bill Test Result: {m2}")
+    s2, m2 = print_bluetooth_direct(test_bill)
+    print(f"\n{'✅' if s2 else '❌'} Bill Test Result: {m2}")
     
     print("\n" + "="*60)
-    print("✅ TEST COMPLETE")
+    print("✅ ALL TESTS COMPLETE!")
     print("="*60)
-    print("\nIf share dialog appeared, select RawBT to print!")
-    print("If not, check that termux-api is installed:")
-    print("  pkg install termux-api")
+    print("\n🎉 Your printer is working!")
+    print("   Printing is now fully automatic.")
+    print("   No user interaction needed!")
     print("="*60 + "\n")
