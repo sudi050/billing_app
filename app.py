@@ -95,25 +95,25 @@ def print_kot(table_id):
     print(f"DEBUG: Kitchen 1 (Beverages) items: {len(kitchen_1_items)}")
     print(f"DEBUG: Kitchen 2 (Food) items: {len(kitchen_2_items)}")
     
-    from printer_agent import format_kot_content, print_kot_rawbt
+    from printer_agent import format_kot_content
     
     messages = []
+    all_kot_content = []
     
-    # Print for Kitchen 1 (Beverages)
+    # Kitchen 1
     if kitchen_1_items:
-        print(f"DEBUG: Printing Kitchen 1 KOT...")
         content_1 = format_kot_content(order, kitchen_1_items)
-        success1, msg1 = print_kot_rawbt(content_1, kitchen_number=1, order_number=order.order_number)
-        print(f"DEBUG: Kitchen 1 result: {msg1}")
-        messages.append(f'Kitchen 1 (Beverages): {msg1}')
+        all_kot_content.append(f"\n=== KITCHEN 1 ===\n{content_1}")
+        messages.append('Kitchen 1: Ready')
     
-    # Print for Kitchen 2 (Food)
+    # Kitchen 2
     if kitchen_2_items:
-        print(f"DEBUG: Printing Kitchen 2 KOT...")
         content_2 = format_kot_content(order, kitchen_2_items)
-        success2, msg2 = print_kot_rawbt(content_2, kitchen_number=2, order_number=order.order_number)
-        print(f"DEBUG: Kitchen 2 result: {msg2}")
-        messages.append(f'Kitchen 2 (Food): {msg2}')
+        all_kot_content.append(f"\n=== KITCHEN 2 ===\n{content_2}")
+        messages.append('Kitchen 2: Ready')
+    
+    # Combine all KOTs
+    combined_kot = "\n".join(all_kot_content)
     
     # Log the action
     db.session.add(Log(
@@ -123,10 +123,11 @@ def print_kot(table_id):
     ))
     db.session.commit()
     
-    final_message = ' | '.join(messages) if messages else 'No items to print'
-    print(f"DEBUG: Final message: {final_message}")
-    
-    return jsonify(success=True, message=final_message)
+    return jsonify(
+        success=True, 
+        message=' | '.join(messages),
+        kot_content=combined_kot  # Send content to JavaScript
+    )
 
 
 # ============================================================
@@ -920,7 +921,7 @@ def billing():
                 return redirect(url_for('billing', table_no=selected_table_no))
 
         # ========================================
-        # GENERATE BILL
+        # GENERATE BILL - WITH WEB SHARE API
         # ========================================
         if request.method == "POST" and "generate_bill" in request.form:
             try:
@@ -981,9 +982,9 @@ def billing():
                 ))
                 db.session.commit()
 
-                # Print handling
+                # Format bill content for printing
                 try:
-                    from printer_agent import format_bill_content, print_bill_rawbt
+                    from printer_agent import format_bill_content
 
                     bill_data = {
                         'bill_id': bill.id,
@@ -998,19 +999,16 @@ def billing():
                     }
 
                     bill_content = format_bill_content(bill_data)
-                    success, message = print_bill_rawbt(bill_content, bill.id)
-
-                    if success:
-                        if "Saved to" in message:
-                            flash(f"✅ Bill #{bill.id} generated!", "success")
-                            flash(f"📄 {message}", "info")
-                        else:
-                            flash(f"✅ Bill #{bill.id} generated and printed!", "success")
-                    else:
-                        flash(f"⚠️ Bill #{bill.id} generated but print failed: {message}", "warning")
+                    
+                    # Store in session for JavaScript to access
+                    session['last_bill_content'] = bill_content
+                    session['last_bill_id'] = bill.id
+                    
+                    flash(f"✅ Bill #{bill.id} generated!", "success")
 
                 except Exception as e:
-                    flash(f"⚠️ Bill #{bill.id} generated but print error: {str(e)}", "warning")
+                    print(f"Print error: {e}")
+                    flash(f"✅ Bill #{bill.id} generated!", "success")
 
                 return redirect(url_for('billing'))
 

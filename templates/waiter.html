@@ -49,12 +49,9 @@
       {% endfor %}
     </tbody>
   </table>
-  
-  <!-- Print KOT Button -->
-  <button id="btnPrintKOT" class="btn btn-primary btn-lg w-100 mt-3" data-table-id="{{ selected_table.id }}">
-    🖨️ Print KOT to Kitchen
+  <button id="btnPrintKOT" class="btn btn-primary mt-2" data-table-id="{{ selected_table.id }}">
+    Print KOT
   </button>
-  
   {% else %}
     <p>No items in cart yet.</p>
   {% endif %}
@@ -100,7 +97,28 @@
   {% endif %}
 </div>
 
+<!-- KOT Print Modal (Bootstrap Modal) -->
+<div class="modal fade" id="kotPrintModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title">🍳 KOT Ready to Print</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <p class="mb-3">Tap the button to send KOT to kitchen printer</p>
+        <button onclick="shareKOT()" class="btn btn-warning btn-lg w-100">
+          <i class="bi bi-printer-fill"></i> Print with RawBT
+        </button>
+        <div id="kotMessage" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+let kotContentToShare = '';
+
 document.addEventListener('DOMContentLoaded', function() {
   const btnPrintKOT = document.getElementById('btnPrintKOT');
   
@@ -122,7 +140,14 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          alert('✅ ' + data.message);
+          if (data.kot_content) {
+            // Store KOT content and show modal
+            kotContentToShare = data.kot_content;
+            const modal = new bootstrap.Modal(document.getElementById('kotPrintModal'));
+            modal.show();
+          } else {
+            alert('✅ ' + data.message);
+          }
         } else {
           alert('❌ ' + data.message);
         }
@@ -132,10 +157,45 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .finally(() => {
         this.disabled = false;
-        this.innerHTML = '🖨️ Print KOT to Kitchen';
+        this.innerHTML = 'Print KOT';
       });
     });
   }
 });
+
+async function shareKOT() {
+  const messageDiv = document.getElementById('kotMessage');
+  
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: 'Kitchen Order Ticket',
+        text: kotContentToShare
+      });
+      
+      messageDiv.innerHTML = '<div class="alert alert-success">✅ KOT sent to printer!</div>';
+      
+      // Close modal after 1 second
+      setTimeout(() => {
+        bootstrap.Modal.getInstance(document.getElementById('kotPrintModal')).hide();
+        messageDiv.innerHTML = '';
+      }, 1000);
+      
+    } else {
+      await navigator.clipboard.writeText(kotContentToShare);
+      messageDiv.innerHTML = '<div class="alert alert-info">📋 KOT copied to clipboard!<br>Open RawBT and paste to print.</div>';
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('Share error:', error);
+      try {
+        await navigator.clipboard.writeText(kotContentToShare);
+        messageDiv.innerHTML = '<div class="alert alert-info">📋 KOT copied to clipboard!<br>Open RawBT and paste to print.</div>';
+      } catch (e) {
+        messageDiv.innerHTML = '<div class="alert alert-danger">⚠️ Unable to share or copy.</div>';
+      }
+    }
+  }
+}
 </script>
 {% endblock %}

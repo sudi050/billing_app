@@ -3,6 +3,51 @@
 <div class="container mt-4">
     <h2>💳 Billing</h2>
 
+    <!-- Print Bill Button (appears after bill generation) -->
+    {% if session.get('last_bill_content') %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <h5 class="alert-heading">
+            <i class="bi bi-check-circle-fill"></i> Bill #{{ session.get('last_bill_id') }} Generated!
+        </h5>
+        <p class="mb-3">Tap the button below to print with RawBT:</p>
+        <button onclick="printBillWithRawBT()" class="btn btn-success btn-lg">
+            <i class="bi bi-printer-fill"></i> Print Bill with RawBT
+        </button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    
+    <script>
+    const billContent = {{ session.get('last_bill_content')|tojson }};
+    {{ session.pop('last_bill_content', None) and "" }}
+    {{ session.pop('last_bill_id', None) and "" }}
+    
+    async function printBillWithRawBT() {
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: 'Restaurant Bill',
+                    text: billContent
+                });
+                console.log('✅ Bill shared successfully');
+            } else {
+                await navigator.clipboard.writeText(billContent);
+                alert('📋 Bill copied to clipboard!\n\nOpen RawBT app and paste to print.');
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('Share error:', error);
+                try {
+                    await navigator.clipboard.writeText(billContent);
+                    alert('📋 Bill copied to clipboard!\n\nOpen RawBT app and paste to print.');
+                } catch (e) {
+                    alert('⚠️ Unable to share or copy. Please try again.');
+                }
+            }
+        }
+    }
+    </script>
+    {% endif %}
+
     <div class="row mt-3">
         <div class="col-md-4">
             <h4>Locked Tables</h4>
@@ -120,7 +165,6 @@
                         </div>
                         <div class="card-body">
                             {% if selected_order.coupon_code %}
-                            <!-- Coupon Applied -->
                             <div class="alert alert-success d-flex justify-content-between align-items-center">
                                 <div>
                                     <strong>✓ Coupon Applied:</strong> {{ selected_order.coupon_code }}
@@ -135,7 +179,6 @@
                                 </form>
                             </div>
                             {% else %}
-                            <!-- Apply Coupon Form -->
                             <form method="POST" id="applyCouponForm">
                                 <input type="hidden" name="table_no" value="{{ selected_table_no }}">
                                 <input type="hidden" name="customer_mobile" id="hiddenMobile" value="">
@@ -231,7 +274,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const hiddenMobile = document.getElementById('hiddenMobile');
     const hiddenName = document.getElementById('hiddenName');
     
-    // Initialize hidden fields with current customer data
+    // Initialize hidden fields
     if (customerMobile && hiddenMobile) {
         hiddenMobile.value = customerMobile.value;
     }
@@ -239,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
         hiddenName.value = customerName.value;
     }
     
-    // Sync customer data whenever it changes
+    // Sync customer data
     if (customerMobile) {
         customerMobile.addEventListener('input', function() {
             this.value = this.value.replace(/[^0-9]/g, '');
@@ -262,26 +305,21 @@ document.addEventListener('DOMContentLoaded', function () {
         couponSelect.addEventListener('change', function() {
             if (this.value) {
                 couponManual.value = this.value;
-                console.log('✅ Dropdown selected:', this.value);
-                console.log('✅ Manual input updated to:', couponManual.value);
             }
         });
         
-        // Manual input changes clear dropdown
         couponManual.addEventListener('input', function() {
             if (this.value) {
                 couponSelect.value = '';
             }
             this.value = this.value.toUpperCase();
-            console.log('✅ Manual input:', this.value);
         });
     }
 
-    // Form submission validation and debugging
+    // Form submission
     const applyCouponForm = document.getElementById('applyCouponForm');
     if (applyCouponForm) {
         applyCouponForm.addEventListener('submit', function(e) {
-            // Sync customer data one more time before submit
             if (customerMobile && hiddenMobile) {
                 hiddenMobile.value = customerMobile.value;
             }
@@ -289,31 +327,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 hiddenName.value = customerName.value;
             }
             
-            console.log('========================================');
-            console.log('🚀 FORM SUBMISSION STARTING');
-            console.log('========================================');
-            console.log('Coupon Manual Element:', couponManual);
-            console.log('Coupon Manual Value:', couponManual ? couponManual.value : 'ELEMENT NOT FOUND');
-            console.log('Coupon Manual Name Attribute:', couponManual ? couponManual.name : 'N/A');
-            
-            // Log all form data
-            const formData = new FormData(this);
-            console.log('Form Data Being Sent:');
-            for (let [key, value] of formData.entries()) {
-                console.log(`  📋 ${key}: "${value}"`);
-            }
-            
-            // Validation
             if (!couponManual || !couponManual.value || couponManual.value.trim() === '') {
                 e.preventDefault();
-                console.error('❌ BLOCKED: Coupon code is empty!');
                 alert('⚠️ Please select or enter a coupon code');
                 return false;
             }
-            
-            console.log('✅ Form validation passed');
-            console.log('✅ Submitting form...');
-            console.log('========================================');
         });
     }
 });
