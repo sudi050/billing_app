@@ -49,6 +49,12 @@
       {% endfor %}
     </tbody>
   </table>
+  
+  <!-- Print KOT Button -->
+  <button id="btnPrintKOT" class="btn btn-primary btn-lg w-100 mt-3" data-table-id="{{ selected_table.id }}">
+    🖨️ Print KOT to Kitchen
+  </button>
+  
   {% else %}
     <p>No items in cart yet.</p>
   {% endif %}
@@ -93,4 +99,43 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const btnPrintKOT = document.getElementById('btnPrintKOT');
+  
+  if (btnPrintKOT) {
+    btnPrintKOT.addEventListener('click', function() {
+      const tableId = this.getAttribute('data-table-id');
+      if (!tableId) {
+        alert('Table ID not found');
+        return;
+      }
+      
+      this.disabled = true;
+      this.innerHTML = '⏳ Printing KOT...';
+      
+      fetch(`/print_kot/${tableId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('✅ ' + data.message);
+        } else {
+          alert('❌ ' + data.message);
+        }
+      })
+      .catch(err => {
+        alert('❌ Failed to print KOT: ' + err.message);
+      })
+      .finally(() => {
+        this.disabled = false;
+        this.innerHTML = '🖨️ Print KOT to Kitchen';
+      });
+    });
+  }
+});
+</script>
 {% endblock %}

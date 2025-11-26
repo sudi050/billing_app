@@ -41,6 +41,94 @@ login_manager.login_view = 'login'
 PRINTER_ENABLED = True
 BLUETOOTH_PRINTER_MAC = "00:11:22:33:44:55"  # Your HOP-HL58 MAC
 
+@app.route('/print_kot/<int:table_id>', methods=['POST'])
+@login_required
+def print_kot(table_id):
+    """Print Kitchen Order Ticket for a table"""
+    print(f"DEBUG: print_kot called for table_id={table_id}")
+    
+    # Find table and its active order
+    table = Table.query.get(table_id)
+    if not table or not table.current_order_id:
+        print(f"DEBUG: No order found for table {table_id}")
+        return jsonify(success=False, message='No active order for this table')
+    
+    order = Order.query.get(table.current_order_id)
+    if not order:
+        print(f"DEBUG: Order not found")
+        return jsonify(success=False, message='Order not found')
+    
+    print(f"DEBUG: Found order #{order.order_number}")
+    
+    try:
+        items = json.loads(order.items)
+        print(f"DEBUG: Loaded {len(items)} items")
+    except Exception as e:
+        print(f"DEBUG: Error loading items: {e}")
+        return jsonify(success=False, message='Error loading order items')
+    
+    if not items:
+        return jsonify(success=False, message='No items in order')
+    
+    # Kitchen 1 categories (whitelist) - UPDATE THIS LIST
+    kitchen_1_cats = ['Shawarma']
+    
+    # Split items: Kitchen 1 = whitelist, Kitchen 2 = everything else
+    kitchen_1_items = []
+    kitchen_2_items = []
+    
+    for item in items:
+        # Add category if missing
+        if 'category' not in item:
+            menu_item = MenuItem.query.get(item['id'])
+            if menu_item:
+                item['category'] = menu_item.category
+        
+        # Check which kitchen
+        item_category = item.get('category', 'Uncategorized')
+        
+        if item_category in kitchen_1_cats:
+            kitchen_1_items.append(item)
+        else:
+            kitchen_2_items.append(item)
+    
+    print(f"DEBUG: Kitchen 1 (Beverages) items: {len(kitchen_1_items)}")
+    print(f"DEBUG: Kitchen 2 (Food) items: {len(kitchen_2_items)}")
+    
+    from printer_agent import format_kot_content, print_kot_rawbt
+    
+    messages = []
+    
+    # Print for Kitchen 1 (Beverages)
+    if kitchen_1_items:
+        print(f"DEBUG: Printing Kitchen 1 KOT...")
+        content_1 = format_kot_content(order, kitchen_1_items)
+        success1, msg1 = print_kot_rawbt(content_1, kitchen_number=1, order_number=order.order_number)
+        print(f"DEBUG: Kitchen 1 result: {msg1}")
+        messages.append(f'Kitchen 1 (Beverages): {msg1}')
+    
+    # Print for Kitchen 2 (Food)
+    if kitchen_2_items:
+        print(f"DEBUG: Printing Kitchen 2 KOT...")
+        content_2 = format_kot_content(order, kitchen_2_items)
+        success2, msg2 = print_kot_rawbt(content_2, kitchen_number=2, order_number=order.order_number)
+        print(f"DEBUG: Kitchen 2 result: {msg2}")
+        messages.append(f'Kitchen 2 (Food): {msg2}')
+    
+    # Log the action
+    db.session.add(Log(
+        username=current_user.username,
+        role=current_user.role,
+        action=f"Printed KOT for Order #{order.order_number}, Table {table.table_no}"
+    ))
+    db.session.commit()
+    
+    final_message = ' | '.join(messages) if messages else 'No items to print'
+    print(f"DEBUG: Final message: {final_message}")
+    
+    return jsonify(success=True, message=final_message)
+
+
 # ============================================================
 # PRINTER FUNCTIONS (Local Mode Only)
 # ============================================================
@@ -322,26 +410,6 @@ def get_discount_description(coupon, customer=None):
 
     return "Special Discount"
 
-
-def calculate_discount(coupon, subtotal):
-    """Calculate discount amount based on coupon type."""
-    discount_amount = 0.0
-
-    if coupon.discount_type == "percent":
-        if coupon.value < 0 or coupon.value > 100:
-            return 0.0
-        discount_amount = subtotal * (coupon.value / 100)
-
-        # Apply max discount cap if field exists
-        if hasattr(coupon, 'max_discount') and coupon.max_discount:
-            discount_amount = min(discount_amount, coupon.max_discount)
-
-    elif coupon.discount_type == "flat":
-        discount_amount = min(coupon.value, subtotal)  # Don't exceed subtotal
-
-    return round(discount_amount, 2)
-
-
 # -------------------- USER LOADER --------------------
 @login_manager.user_loader
 def load_user(user_id):
@@ -575,8 +643,10 @@ def waiter():
                     'id': item.id,
                     'name': item.name,
                     'price': item.price,
-                    'qty': qty
+                    'qty': qty,
+                    'category': item.category
                 })
+
 
             order.items = json.dumps(cart)
             order.coupon_code = None
@@ -671,7 +741,6 @@ def serve_order(order_id):
 # -------------------- BILLING SECTION --------------------
 @app.route('/billing', methods=['GET', 'POST'])
 @login_required
-@local_only  # If using hybrid mode, comment this if not needed
 def billing():
     if current_user.role not in ['admin', 'billing']:
         return redirect(url_for('index'))
@@ -692,42 +761,64 @@ def billing():
             .first()
         )
 
-        if selected_order and selected_order.items:
-            items = json.loads(selected_order.items)
-            subtotal_amount = sum(i["qty"] * i["price"] for i in items)
-            discount_amount = selected_order.discount_amount or 0.0
-            total_amount = max(0, subtotal_amount - discount_amount)
-
-        # Get customer if phone number exists
-        if selected_order and selected_order.customer_mobile:
-            customer = Customer.query.filter_by(phone=selected_order.customer_mobile).first()
-
         # ========================================
-        # APPLY COUPON (keep existing logic)
+        # APPLY COUPON
         # ========================================
         if request.method == "POST" and "apply_coupon" in request.form:
             try:
-                coupon_code = request.form.get("coupon_code", "").strip().upper()
+                print("\n" + "="*60)
+                print("🎟️  APPLY COUPON REQUEST RECEIVED")
+                print("="*60)
+                
+                # Log ALL form data received
+                print(f"📋 All Form Keys: {list(request.form.keys())}")
+                print(f"📋 All Form Data:")
+                for key, value in request.form.items():
+                    print(f"   {key}: '{value}'")
+                
+                # Get coupon code
+                coupon_code = request.form.get("coupon_code_manual", "").strip().upper()
                 customer_mobile = request.form.get("customer_mobile", "").strip()
                 customer_name = request.form.get("customer_name", "").strip()
 
+                print(f"\n📊 Extracted Data:")
+                print(f"   Coupon Code: '{coupon_code}'")
+                print(f"   Customer Mobile: '{customer_mobile}'")
+                print(f"   Customer Name: '{customer_name}'")
+                print(f"   Order #: {selected_order.order_number}")
+                print(f"   Table: {selected_table_no}")
+
+                # Validation
                 if not coupon_code:
-                    flash("Please enter a coupon code", "warning")
+                    print("❌ ERROR: Coupon code is empty!")
+                    flash("⚠️ Please enter or select a coupon code", "warning")
                     return redirect(url_for('billing', table_no=selected_table_no))
 
+                print(f"\n🔍 Looking up coupon '{coupon_code}' in database...")
                 coupon = Coupon.query.filter_by(code=coupon_code).first()
 
                 if not coupon:
-                    flash(f"Invalid coupon code: {coupon_code}", "danger")
+                    print(f"❌ ERROR: Coupon '{coupon_code}' not found in database")
+                    flash(f"❌ Invalid coupon code: {coupon_code}", "danger")
                     return redirect(url_for('billing', table_no=selected_table_no))
 
-                if coupon.discount_type == 'frequency' and not customer_mobile:
-                    flash("Phone number required for this coupon", "warning")
-                    return redirect(url_for('billing', table_no=selected_table_no))
+                print(f"✅ Coupon found!")
+                print(f"   Type: {coupon.discount_type}")
+                print(f"   Value: {coupon.value}")
+                print(f"   Active: {coupon.is_active}")
+                print(f"   Uses: {coupon.current_uses}/{coupon.max_uses}")
 
+                # Update order with customer info
+                if customer_mobile:
+                    selected_order.customer_mobile = customer_mobile
+                if customer_name:
+                    selected_order.customer_name = customer_name
+
+                # Handle customer creation/lookup
                 if customer_mobile:
                     customer = Customer.query.filter_by(phone=customer_mobile).first()
                     if not customer:
+                        print(f"📝 Creating new customer: {customer_name or 'Guest'}")
                         customer = Customer(
                             name=customer_name if customer_name else "Guest", 
                             phone=customer_mobile, 
@@ -738,39 +829,76 @@ def billing():
                         db.session.flush()
                     elif customer_name and customer.name == "Guest":
                         customer.name = customer_name
+                        print(f"📝 Updated customer name to: {customer_name}")
 
-                    selected_order.customer_mobile = customer_mobile
-
+                # Validate coupon
+                print(f"\n🔍 Validating coupon...")
                 is_valid, error_msg = validate_coupon(coupon, selected_order, customer)
 
                 if not is_valid:
-                    flash(error_msg, "danger")
+                    print(f"❌ Coupon validation failed: {error_msg}")
+                    flash(f"❌ {error_msg}", "danger")
                     return redirect(url_for('billing', table_no=selected_table_no))
 
+                print(f"✅ Coupon validation passed!")
+
+                # Calculate discount
+                items = json.loads(selected_order.items)
+                subtotal_amount = sum(i["qty"] * i["price"] for i in items)
+                
+                print(f"\n💰 Calculating discount...")
+                print(f"   Subtotal: ₹{subtotal_amount}")
+                
                 discount = calculate_discount(coupon, subtotal_amount, items, customer)
+                
+                print(f"   Calculated Discount: ₹{discount}")
 
                 if discount <= 0:
-                    flash("This coupon doesn't provide any discount", "warning")
+                    print(f"❌ Discount is zero or negative")
+                    flash("⚠️ This coupon doesn't provide any discount", "warning")
                     return redirect(url_for('billing', table_no=selected_table_no))
 
+                # Apply to order
+                print(f"\n💾 Saving to database...")
+                print(f"   BEFORE - coupon_code: {selected_order.coupon_code}")
+                print(f"   BEFORE - discount_amount: {selected_order.discount_amount}")
+                
                 selected_order.coupon_code = coupon_code
                 selected_order.discount_amount = discount
                 coupon.current_uses += 1
 
+                print(f"   AFTER - coupon_code: {selected_order.coupon_code}")
+                print(f"   AFTER - discount_amount: {selected_order.discount_amount}")
+
                 db.session.commit()
+                
+                print(f"✅ Committed to database!")
+                
+                # Verify save
+                db.session.refresh(selected_order)
+                print(f"\n✅ VERIFICATION (re-read from DB):")
+                print(f"   coupon_code: {selected_order.coupon_code}")
+                print(f"   discount_amount: {selected_order.discount_amount}")
 
                 desc = get_discount_description(coupon, customer)
                 flash(f"✅ Coupon applied: {desc} - You save ₹{discount:.2f}!", "success")
+                
+                print(f"\n✅ SUCCESS! Redirecting...")
+                print("="*60 + "\n")
 
                 return redirect(url_for('billing', table_no=selected_table_no))
 
             except Exception as e:
                 db.session.rollback()
-                flash(f"Error applying coupon: {str(e)}", "danger")
+                print(f"\n❌ EXCEPTION OCCURRED:")
+                print(f"   Error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                flash(f"❌ Error applying coupon: {str(e)}", "danger")
                 return redirect(url_for('billing', table_no=selected_table_no))
 
         # ========================================
-        # REMOVE COUPON (keep existing logic)
+        # REMOVE COUPON
         # ========================================
         if request.method == "POST" and "remove_coupon" in request.form:
             try:
@@ -792,12 +920,17 @@ def billing():
                 return redirect(url_for('billing', table_no=selected_table_no))
 
         # ========================================
-        # GENERATE BILL - WITH DIRECT PRINTING
+        # GENERATE BILL
         # ========================================
         if request.method == "POST" and "generate_bill" in request.form:
             try:
                 customer_mobile = request.form.get("customer_mobile", "").strip()
                 customer_name = request.form.get("customer_name", "").strip()
+
+                items = json.loads(selected_order.items) if selected_order.items else []
+                subtotal_amount = sum(i["qty"] * i["price"] for i in items)
+                discount_amount = selected_order.discount_amount or 0.0
+                total_amount = max(0, subtotal_amount - discount_amount)
 
                 if customer_mobile:
                     customer = Customer.query.filter_by(phone=customer_mobile).first()
@@ -817,10 +950,6 @@ def billing():
                     customer.total_spent += total_amount
                     customer.last_visit = current_time_ist()
 
-                subtotal_amount = sum(i["qty"] * i["price"] for i in items)
-                discount_amount = selected_order.discount_amount if selected_order else 0
-                total_amount = max(0, subtotal_amount - discount_amount)
-
                 bill = Bill(
                     order_id=selected_order.id,
                     table_no=selected_order.table_no,
@@ -836,6 +965,8 @@ def billing():
                 selected_order.status = "billed"
                 if customer_mobile:
                     selected_order.customer_mobile = customer_mobile
+                if customer_name:
+                    selected_order.customer_name = customer_name
 
                 table = Table.query.filter_by(table_no=selected_table_no).first()
                 if table:
@@ -850,51 +981,66 @@ def billing():
                 ))
                 db.session.commit()
 
-                # ========================================
-                # DIRECT THERMAL PRINTING
-                # ========================================
-                if PRINTER_ENABLED:
-                    try:
-                        from printer_agent import format_bill_content
+                # Print handling
+                try:
+                    from printer_agent import format_bill_content, print_bill_rawbt
 
-                        bill_data = {
-                            'bill_id': bill.id,
-                            'order_id': selected_order.id,
-                            'table_no': bill.table_no,
-                            'timestamp': bill.created_at,
-                            'subtotal_amount': bill.subtotal,
-                            'discount_amount': bill.discount,
-                            'coupon_code': bill.coupon_code or 'N/A',
-                            'total_amount': bill.total,
-                            'items': items,
-                            'customer_name': customer.name if customer else 'Guest',
-                            'customer_phone': customer.phone if customer else ''
-                        }
+                    bill_data = {
+                        'bill_id': bill.id,
+                        'order_id': selected_order.id,
+                        'table_no': bill.table_no,
+                        'timestamp': bill.created_at,
+                        'subtotal_amount': bill.subtotal,
+                        'discount_amount': bill.discount,
+                        'coupon_code': bill.coupon_code or 'N/A',
+                        'total_amount': bill.total,
+                        'items': items
+                    }
 
-                        bill_content = format_bill_content(bill_data)
+                    bill_content = format_bill_content(bill_data)
+                    success, message = print_bill_rawbt(bill_content, bill.id)
 
-                        # Print to thermal printer
-                        success, message = print_to_thermal(bill_content)
-
-                        if success:
-                            flash(f"✅ Bill #{bill.id} generated and printed successfully!", "success")
+                    if success:
+                        if "Saved to" in message:
+                            flash(f"✅ Bill #{bill.id} generated!", "success")
+                            flash(f"📄 {message}", "info")
                         else:
-                            flash(f"⚠️ Bill #{bill.id} generated but print failed: {message}", "warning")
-                            flash(f"You can reprint from Admin > Bills", "info")
+                            flash(f"✅ Bill #{bill.id} generated and printed!", "success")
+                    else:
+                        flash(f"⚠️ Bill #{bill.id} generated but print failed: {message}", "warning")
 
-                    except Exception as e:
-                        flash(f"⚠️ Bill generated but print error: {str(e)}", "warning")
-                        flash(f"Bill #{bill.id} saved. Reprint from Admin > Bills", "info")
-                else:
-                    flash(f"✅ Bill #{bill.id} generated! (Printer not configured)", "success")
+                except Exception as e:
+                    flash(f"⚠️ Bill #{bill.id} generated but print error: {str(e)}", "warning")
 
-                # Redirect back to billing page
                 return redirect(url_for('billing'))
 
             except Exception as e:
                 db.session.rollback()
+                import traceback
+                traceback.print_exc()
                 flash(f"Error generating bill: {str(e)}", "danger")
                 return redirect(url_for('billing', table_no=selected_table_no))
+
+        # ========================================
+        # DISPLAY CALCULATIONS (GET)
+        # ========================================
+        if selected_order and selected_order.items:
+            items = json.loads(selected_order.items)
+            subtotal_amount = sum(i["qty"] * i["price"] for i in items)
+            discount_amount = selected_order.discount_amount or 0.0
+            total_amount = max(0, subtotal_amount - discount_amount)
+
+        if selected_order and selected_order.customer_mobile:
+            customer = Customer.query.filter_by(phone=selected_order.customer_mobile).first()
+
+    # Get available coupons
+    available_coupons = Coupon.query.filter(
+        Coupon.is_active == True,
+        Coupon.current_uses < Coupon.max_uses
+    ).all()
+    
+    if selected_order and subtotal_amount > 0:
+        available_coupons = [c for c in available_coupons if c.min_amount <= subtotal_amount]
 
     return render_template(
         "billing.html",
@@ -904,10 +1050,13 @@ def billing():
         selected_order=selected_order,
         items=items,
         subtotal_amount=subtotal_amount,
-        discount_amount=(selected_order.discount_amount if selected_order else 0),
-        total_amount=subtotal_amount - (selected_order.discount_amount if selected_order else 0),
-        customer=customer
+        discount_amount=discount_amount,
+        total_amount=total_amount,
+        customer=customer,
+        available_coupons=available_coupons
     )
+
+
 
 @app.route('/admin/bills/<int:bill_id>/print')
 @login_required

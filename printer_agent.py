@@ -1,84 +1,127 @@
-
 import os
 import json
+import subprocess
 from datetime import datetime
 from models import db, Order, PrintJob, current_time_ist, Bill
 
-# Try to import printer modules
-PRINTER_AVAILABLE = False
-BLUETOOTH_AVAILABLE = False
-
-try:
-    from escpos.printer import Usb, Network, Serial
-    PRINTER_AVAILABLE = True
-    print("✓ python-escpos basic modules loaded")
-except ImportError as e:
-    print(f"⚠️ python-escpos not available: {e}")
-
-try:
-    from escpos.printer import Bluetooth
-    BLUETOOTH_AVAILABLE = True
-    print("✓ Bluetooth printer support loaded")
-except ImportError:
-    print("⚠️ Bluetooth printer not available (will use file fallback)")
-
-# Configuration
 PRINTER_ENABLED = True
-BLUETOOTH_PRINTER_MAC = os.environ.get('PRINTER_MAC', '10:22:33:D0:C7:3A')
 
+# ========== UTILITY: Direct RawBT printing with fallback ==========
+def print_via_rawbt(content, subdir, prefix, identifier=None):
+    """
+    Try to print directly via RawBT, fallback to saving text file.
+    
+    Args:
+        content: The text content to print
+        subdir: Subdirectory under prints/ for fallback
+        prefix: Filename prefix for fallback
+        identifier: Optional bill/order number for filename
+    
+    Returns:
+        (success: bool, message: str)
+    """
+    # Method 1: Try direct printing via Android intent (if available)
+    try:
+        # This uses 'am' (Activity Manager) to send intent to RawBT
+        # Note: RawBT package name may vary, adjust if needed
+        # Common package: ru.a402d.rawbtprinter or com.mmm.rawbt
+        
+        # Save temporary file for intent
+        temp_file = '/tmp/rawbt_temp.txt'
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        # Try to send print intent
+        result = subprocess.run([
+            'am', 'start',
+            '-n', 'ru.a402d.rawbtprinter/.ActivityPrint',
+            '-a', 'android.intent.action.SEND',
+            '-t', 'text/plain',
+            '--es', 'android.intent.extra.TEXT', content
+        ], capture_output=True, timeout=5)
+        
+        if result.returncode == 0:
+            return True, "Printed via RawBT directly"
+        
+    except Exception as e:
+        print(f"Direct RawBT printing failed: {e}")
+    
+    # Method 2: Try via termux-share (if termux-api installed)
+    try:
+        # Save temporary file
+        temp_file = '/tmp/rawbt_temp.txt'
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        result = subprocess.run([
+            'termux-share', '-a', 'send', temp_file
+        ], capture_output=True, timeout=5)
+        
+        if result.returncode == 0:
+            return True, "Sent to RawBT via share (select RawBT from chooser)"
+        
+    except Exception as e:
+        print(f"termux-share method failed: {e}")
+    
+    # Fallback: Save as text file
+    try:
+        directory = os.path.join('prints', subdir)
+        os.makedirs(directory, exist_ok=True)
+        
+        if identifier:
+            filename = f"{prefix}_{identifier}.txt"
+        else:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"{prefix}_{timestamp}.txt"
+        
+        filepath = os.path.join(directory, filename)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        return True, f"Direct print failed - Saved to {filepath} (open with RawBT)"
+    except Exception as e:
+        return False, f"Error: {e}"
 
-# ============================================================
-# ORIGINAL FUNCTIONS (from your printer_agent.py)
-# ============================================================
+# ======= KITCHEN ORDER FUNCTIONS (KOT, MULTIPLE KITCHENS) =======
+def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
+    """
+    Print KOT directly or save for RawBT manual print.
+    
+    Args:
+        kot_content: Formatted KOT text
+        kitchen_number: 1 or 2
+        order_number: Optional order number for filename
+    """
+    subdir = f"kot/kitchen_{kitchen_number}"
+    return print_via_rawbt(kot_content, subdir, "kot", order_number)
 
 def format_kot_content(order: Order, items: list) -> str:
-    """Formats the Kitchen Order Ticket content."""
-
     header = f"*** KITCHEN ORDER TICKET ***\n"
     header += "=" * 32 + "\n"
     header += f"Order #: {order.order_number}\n"
     header += f"Table: {order.table_no}\n"
     header += f"Time: {current_time_ist().strftime('%H:%M:%S')}\n"
     header += "=" * 32 + "\n"
-
     items_content = "QTY  ITEM\n"
     items_content += "-" * 32 + "\n"
-
     for item in items:
         items_content += f"{item.get('qty', 1):<4} {item.get('name', 'Unknown Item')}\n"
-
     footer = "\n" + "=" * 32 + "\n"
     footer += "*** NEW ORDER PLACED ***\n"
-
     return header + items_content + footer
 
+# ================ BILL PRINTING FUNCTIONS =====================
+def print_bill_rawbt(bill_content, bill_id):
+    """
+    Print bill directly or save for RawBT manual print.
+    
+    Args:
+        bill_content: Formatted bill text
+        bill_id: Bill number/ID for filename
+    """
+    return print_via_rawbt(bill_content, "bills", "bill", bill_id)
 
-def create_kot_print_job(order_id: int):
-    """Generates and saves a KOT PrintJob for a given order."""
-    order = Order.query.get(order_id)
-    if not order:
-        return
-
-    try:
-        items = json.loads(order.items)
-    except Exception:
-        items = []
-
-    content = format_kot_content(order, items)
-
-    # Save print job to the database
-    print_job = PrintJob(
-        order_id=order.id,
-        content=content,
-        status='pending'
-    )
-    db.session.add(print_job)
-    # Note: Session commit is handled by the calling route for atomicity
-
-
-def format_bill_content(bill_data: dict) -> str:
-    """Formats the customer bill content."""
-
+def format_bill_content(bill_data):
     header = f"*** RESTAURANT BILL ***\n"
     header += "=" * 32 + "\n"
     header += f"Bill ID: {bill_data['bill_id']}\n"
@@ -86,47 +129,33 @@ def format_bill_content(bill_data: dict) -> str:
     header += f"Table: {bill_data['table_no']}\n"
     header += f"Time: {bill_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}\n"
     header += "=" * 32 + "\n"
-
-    # Items Section
     items_content = "QTY  ITEM                     PRICE\n"
     items_content += "-" * 32 + "\n"
     for item in bill_data['items']:
         line_total = item['price'] * item['qty']
-        item_name = item['name']
+        item_name = item['name'][:20]
         items_content += f"{item['qty']:<4} {item_name:<20} {line_total:>6.2f}\n"
-
-    # Totals Section
     totals_content = "-" * 32 + "\n"
     totals_content += f"SUBTOTAL:                {bill_data['subtotal_amount']:>8.2f}\n"
-
     if bill_data['discount_amount'] > 0:
         totals_content += f"DISCOUNT ({bill_data['coupon_code']}):    -{bill_data['discount_amount']:>8.2f}\n"
-
     totals_content += "=" * 32 + "\n"
     totals_content += f"TOTAL:                   {bill_data['total_amount']:>8.2f}\n"
     totals_content += "=" * 32 + "\n"
-
-    footer = "\n"
-    footer += "THANK YOU! PLEASE VISIT AGAIN!\n"
-
+    footer = "\nTHANK YOU! PLEASE VISIT AGAIN!\n"
     return header + items_content + totals_content + footer
 
-
-def create_bill_print_job(bill_id: int):
-    """Retrieves Bill data and generates a printable Bill PrintJob."""
+def print_bill(bill_id: int):
     bill = db.session.get(Bill, bill_id)
     if not bill:
-        return
-
+        return False, "Bill not found"
     order = db.session.get(Order, bill.order_id)
     if not order:
-        return
-
+        return False, "Order not found"
     try:
         items = json.loads(order.items)
     except Exception:
         items = []
-
     bill_data = {
         'bill_id': bill.id,
         'order_id': order.id,
@@ -138,147 +167,71 @@ def create_bill_print_job(bill_id: int):
         'total_amount': bill.total,
         'items': items
     }
-
     content = format_bill_content(bill_data)
+    return print_bill_rawbt(content, bill.id)
 
-    # Save print job to the database
+# ============== EXISTING SUPPORT (OPTIONAL/KEEP AS NEEDED) ==============
+def create_kot_print_job(order_id: int):
+    order = Order.query.get(order_id)
+    if not order:
+        return
+    try:
+        items = json.loads(order.items)
+    except Exception:
+        items = []
+    content = format_kot_content(order, items)
+    print_job = PrintJob(
+        order_id=order.id,
+        content=content,
+        status='pending'
+    )
+    db.session.add(print_job)
+
+def create_bill_print_job(bill_id: int):
+    bill = db.session.get(Bill, bill_id)
+    if not bill:
+        return
+    order = db.session.get(Order, bill.order_id)
+    if not order:
+        return
+    try:
+        items = json.loads(order.items)
+    except Exception:
+        items = []
+    bill_data = {
+        'bill_id': bill.id,
+        'order_id': order.id,
+        'table_no': bill.table_no,
+        'timestamp': bill.created_at,
+        'subtotal_amount': bill.subtotal,
+        'discount_amount': bill.discount,
+        'coupon_code': bill.coupon_code or 'N/A',
+        'total_amount': bill.total,
+        'items': items
+    }
+    content = format_bill_content(bill_data)
     print_job = PrintJob(order_id=bill.order_id, content=content, status="pending")
     db.session.add(print_job)
 
-
-# ============================================================
-# NEW FUNCTIONS (Bluetooth Printing)
-# ============================================================
-
-def print_to_thermal(bill_content):
-    """
-    Print to thermal printer via Bluetooth.
-    Falls back to file printing if Bluetooth unavailable.
-
-    Args:
-        bill_content: Formatted bill text
-
-    Returns:
-        (success: bool, message: str)
-    """
-
-    if not PRINTER_ENABLED:
-        return False, "Printer disabled in configuration"
-
-    # Method 1: Try Bluetooth if available
-    if BLUETOOTH_AVAILABLE:
-        try:
-            printer = Bluetooth(BLUETOOTH_PRINTER_MAC)
-            printer.text(bill_content)
-            printer.cut()
-            printer.close()
-            return True, "Printed to Bluetooth printer"
-        except Exception as e:
-            print(f"Bluetooth print failed: {e}")
-            # Fall through to file method
-
-    # Method 2: Fallback to file printing
-    try:
-        # Create prints directory if not exists
-        os.makedirs('prints', exist_ok=True)
-
-        # Save to file
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'prints/bill_{timestamp}.txt'
-
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(bill_content)
-
-        return True, f"Saved to {filename} (Bluetooth unavailable)"
-
-    except Exception as e:
-        return False, f"Print failed: {str(e)}"
-
-
-def print_order_to_kitchen(order_data):
-    """
-    Print order ticket to kitchen printer.
-
-    Args:
-        order_data: Dictionary with order information
-
-    Returns:
-        (success: bool, message: str)
-    """
-
-    content = []
-    content.append("="*32)
-    content.append("      KITCHEN ORDER")
-    content.append("="*32)
-    content.append("")
-    content.append(f"Order: #{order_data['order_number']}")
-    content.append(f"Table: {order_data['table_no']}")
-    content.append(f"Time: {order_data['timestamp'].strftime('%H:%M')}")
-    content.append("")
-    content.append("-"*32)
-
-    for item in order_data['items']:
-        content.append(f"{item['qty']}x {item['name']}")
-        if item.get('notes'):
-            content.append(f"   Note: {item['notes']}")
-
-    content.append("-"*32)
-    content.append("")
-
-    bill_content = "\n".join(content)
-
-    return print_to_thermal(bill_content)
-
-
-# ============================================================
-# TEST FUNCTION
-# ============================================================
-
-def test_printer():
-    """Test printer connectivity."""
-    print("\n" + "="*50)
-    print("🖨️  PRINTER TEST")
-    print("="*50)
-
-    print(f"\nPrinter enabled: {PRINTER_ENABLED}")
-    print(f"Bluetooth available: {BLUETOOTH_AVAILABLE}")
-    print(f"Printer MAC: {BLUETOOTH_PRINTER_MAC}")
-
-    if BLUETOOTH_AVAILABLE:
-        print("\n✓ Bluetooth printer support loaded")
-        print("  Will attempt Bluetooth printing")
-    else:
-        print("\n⚠️ Bluetooth not available")
-        print("  Will save bills to prints/ folder")
-
-    # Test print
-    test_bill = {
-        'bill_id': 1,
-        'order_id': 1,
-        'table_no': '1',
-        'timestamp': datetime.now(),
-        'subtotal_amount': 500.0,
-        'discount_amount': 50.0,
-        'coupon_code': 'TEST50',
-        'total_amount': 450.0,
-        'items': [
-            {'name': 'Test Item', 'qty': 2, 'price': 250.0}
-        ]
-    }
-
-    print("\nAttempting test print...")
-    content = format_bill_content(test_bill)
-    success, message = print_to_thermal(content)
-
-    if success:
-        print(f"\n✅ {message}")
-    else:
-        print(f"\n❌ {message}")
-
-    print("="*50 + "\n")
-
-    return success
-
-
+# ======================= SELF-TEST ============================
 if __name__ == '__main__':
-    test_printer()
+    # --- Test KOT for kitchen 1 with order number ---
+    test_kot = "*** KOT TEST ***\nOrder #123\nTable: 5\n\n2x Burger\n1x Fries\n"
+    s1, m1 = print_kot_rawbt(test_kot, kitchen_number=1, order_number=123)
+    print(m1)
+
+    # --- Test Bill print with bill number ---
+    test_bill_data = {
+        'bill_id': 456,
+        'order_id': 888,
+        'table_no': "A1",
+        'timestamp': datetime.now(),
+        'subtotal_amount': 430.0,
+        'discount_amount': 30.0,
+        'coupon_code': "FEST30",
+        'total_amount': 400.0,
+        'items': [{'name': 'Burger', 'qty': 2, 'price': 100.0}, {'name': 'Fries', 'qty': 1, 'price': 80.0}]
+    }
+    test_bill_content = format_bill_content(test_bill_data)
+    s2, m2 = print_bill_rawbt(test_bill_content, bill_id=456)
+    print(m2)

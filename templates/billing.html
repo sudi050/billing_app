@@ -77,99 +77,117 @@
                         </tfoot>
                     </table>
 
+                    <!-- Customer Details -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">👤 Customer Details</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if customer %}
+                            <div class="alert alert-success">
+                                <strong>✓ Returning Customer</strong><br>
+                                Name: {{ customer.name }}<br>
+                                Total Orders: {{ customer.total_visits }}<br>
+                                Lifetime Spent: ₹{{ "%.2f"|format(customer.total_spent) }}<br>
+                                Last Visit: {{ customer.last_visit.strftime('%d-%b-%Y') if customer.last_visit else 'N/A' }}
+                            </div>
+                            {% endif %}
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Phone Number <span class="text-muted">(Optional)</span></label>
+                                    <input type="tel" name="customer_mobile" id="customer_mobile" class="form-control"
+                                        placeholder="10-digit mobile number" pattern="[0-9]{10}" maxlength="10"
+                                        value="{{ selected_order.customer_mobile if selected_order and selected_order.customer_mobile else '' }}">
+                                    <small class="text-muted">For loyalty tracking and coupons</small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Customer Name <span class="text-muted">(Optional)</span></label>
+                                    <input type="text" name="customer_name" id="customer_name" class="form-control"
+                                        placeholder="Enter customer name"
+                                        value="{{ selected_order.customer_name if selected_order and selected_order.customer_name else (customer.name if customer else '') }}">
+                                    <small class="text-muted">Leave empty for walk-in customers</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Coupon Section -->
                     <div class="card mt-4">
-                        <div class="card-header bg-light">
+                        <div class="card-header bg-warning text-dark">
                             <h5 class="mb-0">🎟️ Apply Coupon</h5>
                         </div>
                         <div class="card-body">
                             {% if selected_order.coupon_code %}
-                            <div class="alert alert-success d-flex justify-content-between align-items-center"
-                                role="alert">
+                            <!-- Coupon Applied -->
+                            <div class="alert alert-success d-flex justify-content-between align-items-center">
                                 <div>
                                     <strong>✓ Coupon Applied:</strong> {{ selected_order.coupon_code }}
                                     <br>
-                                    <small>Discount: ₹{{ "%.2f"|format(discount_amount) }}</small>
+                                    <small>Discount: ₹{{ "%.2f"|format(selected_order.discount_amount or 0) }}</small>
                                 </div>
                                 <form method="POST" style="display:inline;">
                                     <input type="hidden" name="table_no" value="{{ selected_table_no }}">
-                                    <button type="submit" name="remove_coupon" class="btn btn-sm btn-outline-danger">
+                                    <button type="submit" name="remove_coupon" value="1" class="btn btn-sm btn-outline-danger">
                                         Remove
                                     </button>
                                 </form>
                             </div>
                             {% else %}
-                            <form method="POST">
+                            <!-- Apply Coupon Form -->
+                            <form method="POST" id="applyCouponForm">
                                 <input type="hidden" name="table_no" value="{{ selected_table_no }}">
-                                <div class="input-group">
-                                    <input type="text" name="coupon_code" class="form-control"
-                                        placeholder="Enter Coupon Code" style="text-transform: uppercase;">
-                                    <button type="submit" name="apply_coupon" class="btn btn-warning">
-                                        Apply Coupon
-                                    </button>
+                                <input type="hidden" name="customer_mobile" id="hiddenMobile" value="">
+                                <input type="hidden" name="customer_name" id="hiddenName" value="">
+                                
+                                {% if available_coupons %}
+                                <div class="mb-3">
+                                    <label class="form-label">Select Coupon</label>
+                                    <select id="couponSelect" class="form-select">
+                                        <option value="">-- Select a coupon --</option>
+                                        {% for coupon in available_coupons %}
+                                        <option value="{{ coupon.code }}">
+                                            {{ coupon.code }}
+                                            {% if coupon.discount_type == 'percent' %}
+                                            - {{ coupon.value }}% off
+                                            {% elif coupon.discount_type == 'flat' %}
+                                            - ₹{{ coupon.value }} off
+                                            {% elif coupon.discount_type == 'bogo' %}
+                                            - Buy {{ coupon.bogo_buy_quantity }} Get {{ coupon.bogo_get_quantity }}
+                                            {% elif coupon.discount_type == 'frequency' %}
+                                            - Every {{ coupon.frequency_nth_order }}th order
+                                            {% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
-                                <small class="text-muted">Enter a valid coupon code to get a discount</small>
+
+                                <div class="text-center mb-2">OR</div>
+                                {% endif %}
+
+                                <div class="mb-3">
+                                    <label class="form-label">Enter Coupon Code</label>
+                                    <input type="text" id="couponManual" name="coupon_code_manual" class="form-control"
+                                        placeholder="Enter coupon code" style="text-transform: uppercase;" autocomplete="off">
+                                </div>
+
+                                <button type="submit" name="apply_coupon" value="1" class="btn btn-warning w-100">
+                                    🎟️ Apply Coupon
+                                </button>
                             </form>
                             {% endif %}
                         </div>
                     </div>
-                    <div class="card mt-3">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">💳 Customer Information</h5>
-                        </div>
-                        <div class="card-body">
-                            <form method="POST">
-                                <input type="hidden" name="table_no" value="{{ selected_table_no }}">
 
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Customer Name (Optional)</label>
-                                        <input type="text" name="customer_name" class="form-control"
-                                            placeholder="Enter customer name"
-                                            value="{{ selected_order.customer_name if selected_order else '' }}">
-                                        <small class="text-muted">Leave empty for walk-in customers</small>
-                                    </div>
-
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Phone Number</label>
-                                        <input type="tel" name="customer_mobile" class="form-control"
-                                            placeholder="10-digit mobile number" pattern="[0-9]{10}"
-                                            value="{{ selected_order.customer_mobile if selected_order else '' }}">
-                                        <small class="text-muted">Required for loyalty coupons</small>
-                                    </div>
-                                </div>
-
-                                {% if customer %}
-                                <div class="alert alert-success">
-                                    <strong>✓ Returning Customer</strong><br>
-                                    Name: {{ customer.name }}<br>
-                                    Total Orders: {{ customer.total_visits }}<br>
-                                    Lifetime Spent: ₹{{ "%.2f"|format(customer.total_spent) }}<br>
-                                    Last Visit: {{ customer.last_visit.strftime('%d-%b-%Y') if customer.last_visit else
-                                    'N/A' }}
-                                </div>
-                                {% endif %}
-                            </form>
-                        </div>
-                    </div>
+                    <!-- Generate Bill Button -->
                     <div class="card mt-4">
-                        <div class="card-header bg-light">
-                            <h5 class="mb-0">👤 Customer Details</h5>
-                        </div>
                         <div class="card-body">
                             <form method="POST">
                                 <input type="hidden" name="table_no" value="{{ selected_table_no }}">
-
-                                <div class="mb-3">
-                                    <label for="customer_mobile" class="form-label">
-                                        Customer Mobile <span class="text-muted">(Optional)</span>
-                                    </label>
-                                    <input type="tel" name="customer_mobile" id="customer_mobile" class="form-control"
-                                        placeholder="Enter 10-digit mobile number" pattern="[0-9]{10}" maxlength="10"
-                                        value="{{ selected_order.customer_mobile if selected_order.customer_mobile else '' }}">
-                                    <small class="text-muted">Enter mobile to track customer visits and loyalty</small>
-                                </div>
-
+                                <input type="hidden" name="customer_mobile" value="{{ selected_order.customer_mobile if selected_order and selected_order.customer_mobile else '' }}">
+                                <input type="hidden" name="customer_name" value="{{ selected_order.customer_name if selected_order and selected_order.customer_name else '' }}">
+                                
                                 <div class="d-grid gap-2">
                                     <button type="submit" name="generate_bill" class="btn btn-success btn-lg">
                                         <i class="bi bi-receipt"></i> Generate Bill & Print
@@ -190,14 +208,6 @@
     </div>
 </div>
 
-<!-- Hidden Bill Content for Printing -->
-{% if bill_content %}
-<div id="printable-bill" style="display: none;">
-    <pre
-        style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4; white-space: pre-wrap; margin: 0;">{{ bill_content }}</pre>
-</div>
-{% endif %}
-
 <style>
     .list-group-item.active a {
         color: white !important;
@@ -210,68 +220,102 @@
     .badge {
         font-size: 0.9em;
     }
-
-    /* Print styles */
-    @media print {
-        body * {
-            visibility: hidden;
-        }
-
-        #printable-bill,
-        #printable-bill * {
-            visibility: visible;
-        }
-
-        #printable-bill {
-            position: absolute;
-            left: 0;
-            top: 0;
-        }
-
-        #printable-bill pre {
-            font-size: 10px;
-            line-height: 1.2;
-        }
-    }
-
-    @page {
-        size: 48mm auto;
-        margin: 5mm;
-    }
 </style>
 
 <script>
-    // Auto-uppercase coupon code input
-    document.addEventListener('DOMContentLoaded', function () {
-        const couponInput = document.querySelector('input[name="coupon_code"]');
-        if (couponInput) {
-            couponInput.addEventListener('input', function () {
-                this.value = this.value.toUpperCase();
-            });
-        }
+document.addEventListener('DOMContentLoaded', function () {
+    const couponSelect = document.getElementById('couponSelect');
+    const couponManual = document.getElementById('couponManual');
+    const customerMobile = document.getElementById('customer_mobile');
+    const customerName = document.getElementById('customer_name');
+    const hiddenMobile = document.getElementById('hiddenMobile');
+    const hiddenName = document.getElementById('hiddenName');
+    
+    // Initialize hidden fields with current customer data
+    if (customerMobile && hiddenMobile) {
+        hiddenMobile.value = customerMobile.value;
+    }
+    if (customerName && hiddenName) {
+        hiddenName.value = customerName.value;
+    }
+    
+    // Sync customer data whenever it changes
+    if (customerMobile) {
+        customerMobile.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (hiddenMobile) {
+                hiddenMobile.value = this.value;
+            }
+        });
+    }
+    
+    if (customerName) {
+        customerName.addEventListener('input', function() {
+            if (hiddenName) {
+                hiddenName.value = this.value;
+            }
+        });
+    }
+    
+    // Dropdown to manual input sync
+    if (couponSelect && couponManual) {
+        couponSelect.addEventListener('change', function() {
+            if (this.value) {
+                couponManual.value = this.value;
+                console.log('✅ Dropdown selected:', this.value);
+                console.log('✅ Manual input updated to:', couponManual.value);
+            }
+        });
+        
+        // Manual input changes clear dropdown
+        couponManual.addEventListener('input', function() {
+            if (this.value) {
+                couponSelect.value = '';
+            }
+            this.value = this.value.toUpperCase();
+            console.log('✅ Manual input:', this.value);
+        });
+    }
 
-        // Mobile number validation
-        const mobileInput = document.querySelector('#customer_mobile');
-        if (mobileInput) {
-            mobileInput.addEventListener('input', function () {
-                this.value = this.value.replace(/[^0-9]/g, '');
-            });
-        }
-
-        // Auto-print if bill content exists
-        const billContent = document.getElementById('printable-bill');
-        if (billContent) {
-            // Small delay to ensure content is rendered
-            setTimeout(function () {
-                window.print();
-
-                // After print dialog closes, remove the bill content from URL
-                window.onafterprint = function () {
-                    // Redirect to billing page without bill_content parameter
-                    window.location.href = "{{ url_for('billing') }}";
-                };
-            }, 300);
-        }
-    });
+    // Form submission validation and debugging
+    const applyCouponForm = document.getElementById('applyCouponForm');
+    if (applyCouponForm) {
+        applyCouponForm.addEventListener('submit', function(e) {
+            // Sync customer data one more time before submit
+            if (customerMobile && hiddenMobile) {
+                hiddenMobile.value = customerMobile.value;
+            }
+            if (customerName && hiddenName) {
+                hiddenName.value = customerName.value;
+            }
+            
+            console.log('========================================');
+            console.log('🚀 FORM SUBMISSION STARTING');
+            console.log('========================================');
+            console.log('Coupon Manual Element:', couponManual);
+            console.log('Coupon Manual Value:', couponManual ? couponManual.value : 'ELEMENT NOT FOUND');
+            console.log('Coupon Manual Name Attribute:', couponManual ? couponManual.name : 'N/A');
+            
+            // Log all form data
+            const formData = new FormData(this);
+            console.log('Form Data Being Sent:');
+            for (let [key, value] of formData.entries()) {
+                console.log(`  📋 ${key}: "${value}"`);
+            }
+            
+            // Validation
+            if (!couponManual || !couponManual.value || couponManual.value.trim() === '') {
+                e.preventDefault();
+                console.error('❌ BLOCKED: Coupon code is empty!');
+                alert('⚠️ Please select or enter a coupon code');
+                return false;
+            }
+            
+            console.log('✅ Form validation passed');
+            console.log('✅ Submitting form...');
+            console.log('========================================');
+        });
+    }
+});
 </script>
 {% endblock %}
