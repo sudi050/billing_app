@@ -1,15 +1,61 @@
+import os
 import json
+import subprocess
 from datetime import datetime
 from models import db, Order, PrintJob, current_time_ist, Bill
 
-# Import the bluetooth printing function
-from bluetooth_printer import print_bluetooth
-
 PRINTER_ENABLED = True
+PRINT_DIR = "/storage/emulated/0/Download/RestaurantPrints"
+
+
+# ========== CORE PRINTING FUNCTION ==========
+def print_bluetooth_rawbt(text_content):
+    """
+    Save to file and open with RawBT via termux-share.
+    No python-escpos needed - works 100% in Termux!
+    
+    Returns:
+        (success: bool, message: str)
+    """
+    try:
+        # Create directory
+        os.makedirs(PRINT_DIR, exist_ok=True)
+        
+        # Generate filename
+        timestamp = datetime.now().strftime('%H%M%S')
+        filename = f"print_{timestamp}.txt"
+        filepath = os.path.join(PRINT_DIR, filename)
+        
+        # Save content
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(text_content)
+        
+        # Set readable permissions
+        os.chmod(filepath, 0o644)
+        
+        print(f"✅ Saved: {filepath}")
+        
+        # Open with termux-share (shows RawBT in share menu)
+        try:
+            subprocess.Popen(['termux-share', filepath])
+            return True, "📱 Share menu opening - Select RawBT"
+        except FileNotFoundError:
+            print("⚠️  termux-share not found")
+            return True, f"📄 File saved: {filename}\nOpen manually with RawBT"
+        except Exception as e:
+            print(f"⚠️  termux-share error: {e}")
+            return True, f"📄 File saved: {filename}\nOpen manually with RawBT"
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, f"❌ Error: {str(e)}"
+
 
 # ========== KOT FUNCTIONS ==========
-def format_kot_content(order: Order, items: list) -> str:
-    """Format KOT for 58mm thermal printer (32 chars wide)."""
+def format_kot_content(order, items):
+    """Format KOT for 58mm thermal printer (32 chars wide)"""
     lines = []
     lines.append("*** KITCHEN ORDER TICKET ***")
     lines.append("=" * 32)
@@ -41,12 +87,12 @@ def format_kot_content(order: Order, items: list) -> str:
 
 
 def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
-    """Print KOT via file-based method."""
+    """Print KOT via RawBT"""
     print(f"\n{'='*50}")
     print(f"🍳 PRINTING KOT - Kitchen {kitchen_number} - Order #{order_number}")
     print(f"{'='*50}")
     
-    success, message = print_bluetooth(kot_content)
+    success, message = print_bluetooth_rawbt(kot_content)
     
     print(f"Result: {message}")
     print(f"{'='*50}\n")
@@ -56,7 +102,7 @@ def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
 
 # ========== BILL FUNCTIONS ==========
 def format_bill_content(bill_data):
-    """Format bill for 58mm thermal printer (32 chars wide)."""
+    """Format bill for 58mm thermal printer (32 chars wide)"""
     lines = []
     lines.append("      RESTAURANT BILL")
     lines.append("=" * 32)
@@ -98,12 +144,12 @@ def format_bill_content(bill_data):
 
 
 def print_bill_rawbt(bill_content, bill_id):
-    """Print bill via file-based method."""
+    """Print bill via RawBT"""
     print(f"\n{'='*50}")
     print(f"💳 PRINTING BILL - Bill #{bill_id}")
     print(f"{'='*50}")
     
-    success, message = print_bluetooth(bill_content)
+    success, message = print_bluetooth_rawbt(bill_content)
     
     print(f"Result: {message}")
     print(f"{'='*50}\n")
@@ -111,8 +157,8 @@ def print_bill_rawbt(bill_content, bill_id):
     return success, message
 
 
-def print_bill(bill_id: int):
-    """Print a bill by ID."""
+def print_bill(bill_id):
+    """Print a bill by ID"""
     bill = db.session.get(Bill, bill_id)
     if not bill:
         return False, "Bill not found"
@@ -123,7 +169,7 @@ def print_bill(bill_id: int):
     
     try:
         items = json.loads(order.items)
-    except Exception:
+    except:
         items = []
     
     bill_data = {
@@ -143,15 +189,15 @@ def print_bill(bill_id: int):
 
 
 # ========== PRINT JOB SUPPORT ==========
-def create_kot_print_job(order_id: int):
-    """Create a KOT print job in database."""
+def create_kot_print_job(order_id):
+    """Create KOT print job in database"""
     order = Order.query.get(order_id)
     if not order:
         return
     
     try:
         items = json.loads(order.items)
-    except Exception:
+    except:
         items = []
     
     content = format_kot_content(order, items)
@@ -159,8 +205,8 @@ def create_kot_print_job(order_id: int):
     db.session.add(print_job)
 
 
-def create_bill_print_job(bill_id: int):
-    """Create a bill print job in database."""
+def create_bill_print_job(bill_id):
+    """Create bill print job in database"""
     bill = db.session.get(Bill, bill_id)
     if not bill:
         return
@@ -171,7 +217,7 @@ def create_bill_print_job(bill_id: int):
     
     try:
         items = json.loads(order.items)
-    except Exception:
+    except:
         items = []
     
     bill_data = {
@@ -189,3 +235,74 @@ def create_bill_print_job(bill_id: int):
     content = format_bill_content(bill_data)
     print_job = PrintJob(order_id=bill.order_id, content=content, status="pending")
     db.session.add(print_job)
+
+
+# ========== TEST ==========
+if __name__ == '__main__':
+    print("\n" + "="*60)
+    print("🖨️  RAWBT PRINTER TEST")
+    print("="*60)
+    print(f"\n📁 Save location: {PRINT_DIR}")
+    
+    # Test KOT
+    print("\n📝 TEST 1: Kitchen Order Ticket")
+    test_kot = """*** KITCHEN ORDER TICKET ***
+================================
+Order #: 123
+Table: 5
+Time: 14:30:25
+================================
+
+QTY  ITEM
+--------------------------------
+2    Burger
+1    Fries
+3    Coke
+
+================================
+*** PREPARE THIS ORDER ***
+
+
+"""
+    
+    s1, m1 = print_bluetooth_rawbt(test_kot)
+    print(f"\n{'✅' if s1 else '❌'} Result: {m1}")
+    
+    # Test Bill
+    print("\n📝 TEST 2: Restaurant Bill")
+    test_bill = """      RESTAURANT BILL
+================================
+Bill #: 456
+Order #: 888
+Table: A1
+Time: 27-Nov-2025 14:30
+================================
+
+QTY  ITEM              PRICE
+--------------------------------
+2    Burger             200.00
+1    Fries               80.00
+2    Coke               100.00
+
+--------------------------------
+SUBTOTAL:               380.00
+DISCOUNT (FEST30)       -30.00
+================================
+TOTAL:                  350.00
+================================
+
+    THANK YOU!
+  PLEASE VISIT AGAIN!
+
+
+"""
+    
+    s2, m2 = print_bluetooth_rawbt(test_bill)
+    print(f"\n{'✅' if s2 else '❌'} Result: {m2}")
+    
+    print("\n" + "="*60)
+    print("✅ TEST COMPLETE!")
+    print("="*60)
+    print("\n📱 If share menu appeared, select RawBT")
+    print("📁 If not, check: Downloads/RestaurantPrints/")
+    print("="*60 + "\n")

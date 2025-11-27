@@ -6,14 +6,10 @@ import json
 import os
 import uuid
 
-
-# Your models
 from models import db, User, Table, MenuItem, Order, Bill, Customer, Coupon, Log, PrintJob, current_time_ist
 
-# Printer functions
+# ✅ Import printer functions from printer_agent
 from printer_agent import format_bill_content, print_bill_rawbt, format_kot_content, print_kot_rawbt
-
-# Rest of your app.py code...
 
 
 # ============================================================
@@ -767,32 +763,35 @@ def serve_order(order_id):
 def billing():
     if current_user.role not in ['admin', 'billing']:
         return redirect(url_for('index'))
-
+    
     tables = Table.query.filter(Table.locked == True, Table.is_delivery == False).all()
     delivery_table = Table.query.filter_by(is_delivery=True).first()
-
     selected_table_no = request.args.get('table_no') or request.form.get('table_no')
     selected_order = None
     items = []
     subtotal_amount = discount_amount = total_amount = 0.0
     customer = None
-
+    
     if selected_table_no:
-        selected_order = (
-            Order.query.join(Table, Order.table_no == Table.table_no)
-            .filter(Table.table_no == selected_table_no, Order.status.in_(['pending', 'served']))
+        selected_order = Order.query.join(Table, Order.table_no == Table.table_no) \
+            .filter(Table.table_no == selected_table_no, Order.status.in_(['pending', 'served'])) \
             .first()
-        )
-
-        if selected_order and selected_order.items:
-            items = json.loads(selected_order.items)
+    
+    # ✅ ADD THIS SAFETY CHECK
+    if selected_order:
+        try:
+            items = json.loads(selected_order.items) if selected_order.items else []
             subtotal_amount = sum(i['qty'] * i['price'] for i in items)
             discount_amount = selected_order.discount_amount or 0.0
             total_amount = max(0, subtotal_amount - discount_amount)
             
             if selected_order.customer_mobile:
                 customer = Customer.query.filter_by(phone=selected_order.customer_mobile).first()
-    
+        except Exception as e:
+            print(f"Error processing order: {e}")
+            items = []
+            subtotal_amount = discount_amount = total_amount = 0.0
+
 
         # ========================================
         # APPLY COUPON

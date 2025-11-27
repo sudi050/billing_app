@@ -7,8 +7,8 @@ PRINT_DIR = "/storage/emulated/0/Download/RestaurantPrints"
 
 def print_bluetooth(content):
     """
-    Save print content and open with RawBT.
-    Works 100% in Termux - no dependencies!
+    Save print content and auto-open with RawBT.
+    Works from Flask background process!
     
     Returns:
         (success: bool, message: str)
@@ -28,22 +28,88 @@ def print_bluetooth(content):
         
         print(f"✅ Saved: {filepath}")
         
-        # Try to auto-open with app chooser
+        # Method 1: Try Android Intent (works from background)
         try:
+            print("🔄 Attempting to open with Android Intent...")
+            result = subprocess.run([
+                'am', 'start',
+                '-a', 'android.intent.action.VIEW',
+                '-d', f'file://{filepath}',
+                '-t', 'text/plain',
+                '--user', '0'
+            ], timeout=5, capture_output=True, text=True)
+            
+            print(f"   Intent return code: {result.returncode}")
+            if result.stdout:
+                print(f"   Output: {result.stdout}")
+            if result.stderr:
+                print(f"   Error: {result.stderr}")
+            
+            if result.returncode == 0:
+                return True, "📱 Opening with RawBT"
+        except FileNotFoundError:
+            print("   'am' command not found")
+        except Exception as e:
+            print(f"   Intent failed: {e}")
+        
+        # Method 2: Try termux-open
+        try:
+            print("🔄 Attempting termux-open...")
             result = subprocess.run([
                 'termux-open',
                 filepath
-            ], timeout=3, capture_output=True)
+            ], timeout=5, capture_output=True, text=True)
+            
+            print(f"   termux-open return code: {result.returncode}")
             
             if result.returncode == 0:
-                return True, "📱 Opening with RawBT - Select RawBT from menu"
+                return True, "📱 Opening with RawBT"
+        except FileNotFoundError:
+            print("   'termux-open' not found")
         except Exception as e:
-            print(f"termux-open failed: {e}")
+            print(f"   termux-open failed: {e}")
         
-        # If auto-open fails, return file location
-        return True, f"📄 Saved to Downloads/RestaurantPrints/{filename}\nOpen with RawBT to print"
+        # Method 3: Try termux-share (requires Termux:API)
+        try:
+            print("🔄 Attempting termux-share...")
+            result = subprocess.run([
+                'termux-share',
+                '-a', 'send',
+                filepath
+            ], timeout=5, capture_output=True, text=True)
+            
+            print(f"   termux-share return code: {result.returncode}")
+            
+            if result.returncode == 0:
+                return True, "📱 Share menu opened"
+        except FileNotFoundError:
+            print("   'termux-share' not found (install termux-api)")
+        except Exception as e:
+            print(f"   termux-share failed: {e}")
+        
+        # Method 4: Try xdg-open (Linux systems)
+        try:
+            print("🔄 Attempting xdg-open...")
+            result = subprocess.run([
+                'xdg-open',
+                filepath
+            ], timeout=5, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return True, "📱 Opening with default app"
+        except FileNotFoundError:
+            print("   'xdg-open' not found")
+        except Exception as e:
+            print(f"   xdg-open failed: {e}")
+        
+        # If all methods fail, file is still saved
+        print("⚠️  Auto-open failed, but file is saved")
+        return True, f"📄 Saved: Downloads/RestaurantPrints/{filename}\nOpen manually with file manager"
         
     except Exception as e:
+        print(f"❌ Error in print_bluetooth: {e}")
+        import traceback
+        traceback.print_exc()
         return False, f"❌ Error: {str(e)}"
 
 
@@ -64,15 +130,20 @@ If you see this, it works!
 
 """
     
-    print("\n📝 Printing test receipt...")
+    print("\n📝 Testing print function...")
     success, message = print_bluetooth(test_content)
     
-    print(f"\n{message}")
+    print(f"\n{'='*60}")
+    print(f"Result: {message}")
+    print(f"Success: {success}")
+    print(f"{'='*60}")
     
     if success:
-        print("\n" + "="*60)
-        print("✅ Test completed!")
-        print("="*60)
-        print("\nIf app chooser appeared, select RawBT.")
-        print("If not, check Downloads/RestaurantPrints folder.")
-        print("="*60)
+        print("\n✅ Test completed!")
+        print("\nWhat should happen:")
+
+    else:
+        print("\n❌ Test failed!")
+        print("Check the error messages above")
+    
+    print("="*60 + "\n")
