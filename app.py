@@ -4,6 +4,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import json
 import os
+import uuid
+
 
 # Your models
 from models import db, User, Table, MenuItem, Order, Bill, Customer, Coupon, Log, PrintJob, current_time_ist
@@ -543,36 +545,30 @@ def print_preview():
 @app.route('/waiter', methods=['GET', 'POST'])
 @login_required
 def waiter():
+    # ========== DEBUG START ==========
+    print("\n" + "="*60)
+    print(f"🔍 WAITER ROUTE CALLED")
+    print(f"METHOD: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"FORM: {dict(request.form)}")
+    print(f"'add_item' in form: {'add_item' in request.form}")
+    print("="*60 + "\n")
+    # ========== DEBUG END ==========
+    
     if current_user.role not in ['admin', 'waiter']:
         return redirect(url_for('index'))
     
-    tables = Table.query.order_by(Table.table_no).all()
-    selected_table_id = request.args.get('table_id', type=int)
-    selected_table = None
-    active_order = None
-    cart = []
-    
-    if selected_table_id:
-        selected_table = Table.query.get(selected_table_id)
-        if selected_table and selected_table.current_order_id:
-            active_order = Order.query.get(selected_table.current_order_id)
-            cart = json.loads(active_order.items) if active_order and active_order.items else []
-    
-    menu_items = MenuItem.query.filter_by(available=True).order_by(MenuItem.category, MenuItem.name).all()
-    menu_by_category = {}
-    for item in menu_items:
-        cat = item.category or 'Uncategorized'
-        menu_by_category.setdefault(cat, []).append(item)
+    # ========== HANDLE POST FIRST (BEFORE LOADING DATA) ==========
     
     # --- Add item ---
     if request.method == 'POST' and 'add_item' in request.form:
         try:
-            # FIX: Use underscores to match HTML form field names
             table_id = int(request.form['table_id'])
             item_id = int(request.form['item_id'])
             qty = int(request.form.get('qty', 1))
             
-            # Validate quantity
+            print(f"✅ Processing add_item: table={table_id}, item={item_id}, qty={qty}")
+            
             if qty <= 0 or qty > 100:
                 flash('Invalid quantity. Please enter between 1-100.', 'danger')
                 return redirect(url_for('waiter', table_id=table_id))
@@ -634,21 +630,22 @@ def waiter():
             ))
             db.session.commit()
             
-            flash(f'Added {qty}x {item.name} to Table {table.table_no}', 'success')
+            flash(f'✅ Added {qty}x {item.name} to Table {table.table_no}', 'success')
             return redirect(url_for('waiter', table_id=table.id))
             
-        except ValueError:
+        except ValueError as e:
+            print(f"❌ ValueError: {e}")
             flash('Invalid input values', 'danger')
-            return redirect(url_for('waiter', table_id=selected_table_id))
+            return redirect(url_for('waiter'))
         except Exception as e:
+            print(f"❌ Exception: {e}")
             db.session.rollback()
             flash(f'Error adding item: {str(e)}', 'danger')
-            return redirect(url_for('waiter', table_id=selected_table_id))
+            return redirect(url_for('waiter'))
     
     # --- Remove item ---
     if request.method == 'POST' and 'remove_item' in request.form:
         try:
-            # FIX: Use underscores
             table_id = int(request.form['table_id'])
             item_id = int(request.form['remove_item'])
             
@@ -673,12 +670,31 @@ def waiter():
             flash(f'Error removing item: {str(e)}', 'danger')
             return redirect(url_for('waiter'))
     
+    # ========== NOW LOAD DATA FOR GET REQUEST ==========
+    
+    tables = Table.query.order_by(Table.table_no).all()
+    selected_table_id = request.args.get('table_id', type=int)
+    selected_table = None
+    active_order = None
+    cart = []
+    
+    if selected_table_id:
+        selected_table = Table.query.get(selected_table_id)
+        if selected_table and selected_table.current_order_id:
+            active_order = Order.query.get(selected_table.current_order_id)
+            cart = json.loads(active_order.items) if active_order and active_order.items else []
+    
+    menu_items = MenuItem.query.filter_by(available=True).order_by(MenuItem.category, MenuItem.name).all()
+    menu_by_category = {}
+    for item in menu_items:
+        cat = item.category or 'Uncategorized'
+        menu_by_category.setdefault(cat, []).append(item)
+    
     return render_template('waiter.html',
                          tables=tables,
                          selected_table=selected_table,
                          cart=cart,
                          menu_by_category=menu_by_category)
-
 
 
 # -------------------- KITCHEN SECTION --------------------
