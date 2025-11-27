@@ -5,83 +5,17 @@ from models import db, Order, PrintJob, current_time_ist, Bill
 
 PRINTER_ENABLED = True
 
-# ========== PRINTER CONFIGURATION ==========
-PRINTER_MAC = "10:22:33:D0:C7:3A"  # REPLACE WITH YOUR PRINTER'S MAC ADDRESS
-
-# To find your printer's MAC address, run in Termux:
-# bluetoothctl
-# scan on
-# (note the MAC address of your printer)
-# pair XX:XX:XX:XX:XX:XX
-# trust XX:XX:XX:XX:XX:XX
-
-# ========== DIRECT BLUETOOTH PRINTING ==========
-def print_bluetooth_direct(text_content):
-    """
-    Print directly to Bluetooth thermal printer using python-escpos.
-    No user interaction needed - fully automatic!
-    
-    Returns:
-        (success: bool, message: str)
-    """
-    try:
-        # Import escpos library
-        from escpos.printer import Bluetooth
-        
-        print(f"🔄 Connecting to printer at {PRINTER_MAC}...")
-        
-        # Connect to printer
-        printer = Bluetooth(PRINTER_MAC)
-        
-        print(f"✅ Connected! Sending print job...")
-        
-        # Send text content
-        printer.text(text_content)
-        
-        # Cut paper
-        printer.cut()
-        
-        # Close connection
-        printer.close()
-        
-        print(f"✅ Print job completed successfully!")
-        
-        return True, "✅ Printed successfully"
-        
-    except ImportError:
-        error_msg = (
-            "❌ python-escpos not installed!\n"
-            "Install it with: pip install python-escpos"
-        )
-        print(error_msg)
-        return False, error_msg
-        
-    except Exception as e:
-        error_msg = f"❌ Print error: {str(e)}"
-        print(error_msg)
-        
-        # Common error messages and solutions
-        if "Connection refused" in str(e):
-            return False, "❌ Printer not paired or turned off. Check Bluetooth settings."
-        elif "No such device" in str(e):
-            return False, f"❌ Printer {PRINTER_MAC} not found. Check MAC address."
-        elif "Permission denied" in str(e):
-            return False, "❌ Bluetooth permission denied. Grant Termux location permission."
-        else:
-            return False, error_msg
-
+# Import the bluetooth printing function
+from bluetooth_printer import print_bluetooth
 
 # ======= KITCHEN ORDER FUNCTIONS (KOT) =======
 def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
-    """
-    Print KOT directly to Bluetooth printer.
-    Fully automatic - no user interaction!
-    """
+    """Print KOT to Bluetooth printer."""
     print(f"\n{'='*50}")
     print(f"🍳 PRINTING KOT - Kitchen {kitchen_number} - Order #{order_number}")
     print(f"{'='*50}")
     
-    success, message = print_bluetooth_direct(kot_content)
+    success, message = print_bluetooth(kot_content)
     
     print(f"Result: {message}")
     print(f"{'='*50}\n")
@@ -116,22 +50,19 @@ def format_kot_content(order: Order, items: list) -> str:
     lines.append("*** PREPARE THIS ORDER ***")
     lines.append("")
     lines.append("")
-    lines.append("")  # Extra lines for tear-off
+    lines.append("")
     
     return "\n".join(lines)
 
 
 # ================ BILL PRINTING FUNCTIONS =====================
 def print_bill_rawbt(bill_content, bill_id):
-    """
-    Print bill directly to Bluetooth printer.
-    Fully automatic - no user interaction!
-    """
+    """Print bill to Bluetooth printer."""
     print(f"\n{'='*50}")
     print(f"💳 PRINTING BILL - Bill #{bill_id}")
     print(f"{'='*50}")
     
-    success, message = print_bluetooth_direct(bill_content)
+    success, message = print_bluetooth(bill_content)
     
     print(f"Result: {message}")
     print(f"{'='*50}\n")
@@ -214,6 +145,7 @@ def print_bill(bill_id: int):
 
 # ============== PRINT JOB SUPPORT ==============
 def create_kot_print_job(order_id: int):
+    """Create a KOT print job in database."""
     order = Order.query.get(order_id)
     if not order:
         return
@@ -229,6 +161,7 @@ def create_kot_print_job(order_id: int):
 
 
 def create_bill_print_job(bill_id: int):
+    """Create a bill print job in database."""
     bill = db.session.get(Bill, bill_id)
     if not bill:
         return
@@ -257,107 +190,3 @@ def create_bill_print_job(bill_id: int):
     content = format_bill_content(bill_data)
     print_job = PrintJob(order_id=bill.order_id, content=content, status="pending")
     db.session.add(print_job)
-
-
-# ======================= SELF-TEST ============================
-if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("🖨️  BLUETOOTH PRINTER DIRECT TEST")
-    print("="*60)
-    
-    print(f"\n📱 Configuration:")
-    print(f"   Printer MAC: {PRINTER_MAC}")
-    
-    try:
-        from escpos.printer import Bluetooth
-        print(f"   python-escpos: ✅ Installed")
-    except ImportError:
-        print(f"   python-escpos: ❌ NOT INSTALLED")
-        print(f"\n⚠️  Install with: pip install python-escpos")
-        print("="*60 + "\n")
-        exit(1)
-    
-    # Test KOT
-    print("\n" + "="*60)
-    print("📝 TEST 1: Kitchen Order Ticket")
-    print("="*60)
-    test_kot = """*** KITCHEN ORDER TICKET ***
-================================
-Order #: 123
-Table: 5
-Time: 14:30:25
-================================
-
-QTY  ITEM
---------------------------------
-2    Burger
-1    Fries
-3    Coke
-
-================================
-*** PREPARE THIS ORDER ***
-
-
-"""
-    
-    s1, m1 = print_bluetooth_direct(test_kot)
-    print(f"\n{'✅' if s1 else '❌'} KOT Test Result: {m1}")
-    
-    if not s1:
-        print("\n" + "="*60)
-        print("❌ TEST FAILED - TROUBLESHOOTING")
-        print("="*60)
-        print("\n1. Check printer is turned ON")
-        print("2. Check Bluetooth is enabled")
-        print("3. Pair printer with:")
-        print("   bluetoothctl")
-        print("   scan on")
-        print("   pair XX:XX:XX:XX:XX:XX")
-        print("   trust XX:XX:XX:XX:XX:XX")
-        print("   connect XX:XX:XX:XX:XX:XX")
-        print("\n4. Update PRINTER_MAC at the top of this file")
-        print("5. Grant Termux location permission (needed for Bluetooth)")
-        print("="*60 + "\n")
-        exit(1)
-    
-    # Test Bill
-    print("\n" + "="*60)
-    print("📝 TEST 2: Restaurant Bill")
-    print("="*60)
-    test_bill = """      RESTAURANT BILL
-================================
-Bill #: 456
-Order #: 888
-Table: A1
-Time: 27-Nov-2025 14:30
-================================
-
-QTY  ITEM              PRICE
---------------------------------
-2    Burger             200.00
-1    Fries               80.00
-2    Coke               100.00
-
---------------------------------
-SUBTOTAL:               380.00
-DISCOUNT (FEST30)       -30.00
-================================
-TOTAL:                  350.00
-================================
-
-    THANK YOU!
-  PLEASE VISIT AGAIN!
-
-
-"""
-    
-    s2, m2 = print_bluetooth_direct(test_bill)
-    print(f"\n{'✅' if s2 else '❌'} Bill Test Result: {m2}")
-    
-    print("\n" + "="*60)
-    print("✅ ALL TESTS COMPLETE!")
-    print("="*60)
-    print("\n🎉 Your printer is working!")
-    print("   Printing is now fully automatic.")
-    print("   No user interaction needed!")
-    print("="*60 + "\n")

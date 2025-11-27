@@ -1,16 +1,18 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from printer_agent import create_kot_print_job, create_bill_print_job, format_bill_content
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-import uuid, json, os
-from io import StringIO, BytesIO
-from models import db, User, MenuItem, Customer, Coupon, Order, Table, Bill, Log, PrintJob, current_time_ist
-from werkzeug.security import check_password_hash
-from sqlalchemy import extract
-import calendar
-import csv
-from flask import make_response
-from urllib.parse import quote_plus
+import json
+import os
+
+# Your models
+from models import db, User, Table, MenuItem, Order, Bill, Customer, Coupon, Log, PrintJob, current_time_ist
+
+# Printer functions
+from printer_agent import format_bill_content, print_bill_rawbt, format_kot_content, print_kot_rawbt
+
+# Rest of your app.py code...
+
 
 # ============================================================
 # CONFIGURATION - Set deployment mode
@@ -43,76 +45,41 @@ BLUETOOTH_PRINTER_MAC = "10:22:33:D0:C7:3A"  # Your HOP-HL58 MAC
 @app.route('/print_kot/<int:table_id>', methods=['POST'])
 @login_required
 def print_kot(table_id):
-    """Print Kitchen Order Ticket for a table"""
-    print(f"DEBUG: print_kot called for table_id={table_id}")
-    
-    # Find table and its active order
+    """Print Kitchen Order Ticket"""
     table = Table.query.get(table_id)
     if not table or not table.current_order_id:
-        print(f"DEBUG: No order found for table {table_id}")
-        return jsonify(success=False, message='No active order for this table')
-    
+        return jsonify(success=False, message='No active order')
+
     order = Order.query.get(table.current_order_id)
     if not order:
-        print(f"DEBUG: Order not found")
         return jsonify(success=False, message='Order not found')
-    
-    print(f"DEBUG: Found order #{order.order_number}")
-    
+
     try:
         items = json.loads(order.items)
-        print(f"DEBUG: Loaded {len(items)} items")
-    except Exception as e:
-        print(f"DEBUG: Error loading items: {e}")
-        return jsonify(success=False, message='Error loading order items')
-    
+    except:
+        return jsonify(success=False, message='Error loading items')
+
     if not items:
         return jsonify(success=False, message='No items in order')
-    
-    # Kitchen 1 categories (whitelist) - UPDATE THIS LIST
-    kitchen_1_cats = ['Shawarma']
-    
-    # Split items: Kitchen 1 = whitelist, Kitchen 2 = everything else
-    kitchen_1_items = []
-    kitchen_2_items = []
-    
-    for item in items:
-        # Add category if missing
-        if 'category' not in item:
-            menu_item = MenuItem.query.get(item['id'])
-            if menu_item:
-                item['category'] = menu_item.category
-        
-        # Check which kitchen
-        item_category = item.get('category', 'Uncategorized')
-        
-        if item_category in kitchen_1_cats:
-            kitchen_1_items.append(item)
-        else:
-            kitchen_2_items.append(item)
-    
-    print(f"DEBUG: Kitchen 1 (Beverages) items: {len(kitchen_1_items)}")
-    print(f"DEBUG: Kitchen 2 (Food) items: {len(kitchen_2_items)}")
-    
-    from printer_agent import format_kot_content
-    
+
+    # Split items by kitchen (if needed)
+    kitchen_1_cats = ['Shawarma', 'Beverages']  # Your categories
+    kitchen_1_items = [i for i in items if i.get('category') in kitchen_1_cats]
+    kitchen_2_items = [i for i in items if i.get('category') not in kitchen_1_cats]
+
     messages = []
-    all_kot_content = []
     
-    # Kitchen 1
+    # Print to Kitchen 1
     if kitchen_1_items:
         content_1 = format_kot_content(order, kitchen_1_items)
-        all_kot_content.append(f"\n=== KITCHEN 1 ===\n{content_1}")
-        messages.append('Kitchen 1: Ready')
+        success1, msg1 = print_kot_rawbt(content_1, kitchen_number=1, order_number=order.order_number)
+        messages.append(f"Kitchen 1: {msg1}")
     
-    # Kitchen 2
+    # Print to Kitchen 2
     if kitchen_2_items:
         content_2 = format_kot_content(order, kitchen_2_items)
-        all_kot_content.append(f"\n=== KITCHEN 2 ===\n{content_2}")
-        messages.append('Kitchen 2: Ready')
-    
-    # Combine all KOTs
-    combined_kot = "\n".join(all_kot_content)
+        success2, msg2 = print_kot_rawbt(content_2, kitchen_number=2, order_number=order.order_number)
+        messages.append(f"Kitchen 2: {msg2}")
     
     # Log the action
     db.session.add(Log(
@@ -122,11 +89,8 @@ def print_kot(table_id):
     ))
     db.session.commit()
     
-    return jsonify(
-        success=True, 
-        message=' | '.join(messages),
-        kot_content=combined_kot  # Send content to JavaScript
-    )
+    return jsonify(success=True, message=' | '.join(messages))
+
 
 
 # ============================================================
@@ -992,9 +956,9 @@ def billing():
                 db.session.commit()
 
                 # Format bill content for printing
-                try:
-                    from printer_agent import format_bill_content
+                # After db.session.commit() in the generate_bill section:
 
+                try:
                     bill_data = {
                         'bill_id': bill.id,
                         'order_id': selected_order.id,
@@ -1008,18 +972,17 @@ def billing():
                     }
 
                     bill_content = format_bill_content(bill_data)
+                    success, message = print_bill_rawbt(bill_content, bill.id)
                     
-                    # Store in session for JavaScript to access
-                    session['last_bill_content'] = bill_content
-                    session['last_bill_id'] = bill.id
-                    
-                    flash(f"✅ Bill #{bill.id} generated!", "success")
+                    if success:
+                        flash(f"✅ Bill #{bill.id} generated! {message}", "success")
+                    else:
+                        flash(f"✅ Bill #{bill.id} generated! {message}", "warning")
 
                 except Exception as e:
                     print(f"Print error: {e}")
                     flash(f"✅ Bill #{bill.id} generated!", "success")
 
-                return redirect(url_for('billing'))
 
             except Exception as e:
                 db.session.rollback()
