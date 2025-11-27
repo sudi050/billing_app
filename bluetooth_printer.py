@@ -61,6 +61,7 @@ This is a test receipt.
 If you see this, it works!
 
 
+
 """
     
     print("\n📝 Printing test receipt...")

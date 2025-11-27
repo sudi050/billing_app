@@ -48,50 +48,81 @@ BLUETOOTH_PRINTER_MAC = "10:22:33:D0:C7:3A"  # Your HOP-HL58 MAC
 @login_required
 def print_kot(table_id):
     """Print Kitchen Order Ticket"""
+    print(f"\n{'='*60}")
+    print(f"🖨️ PRINT_KOT CALLED - Table ID: {table_id}")
+    print(f"{'='*60}")
+    
     table = Table.query.get(table_id)
     if not table or not table.current_order_id:
-        return jsonify(success=False, message='No active order')
-
+        print("❌ No active order")
+        return jsonify(success=False, message="No active order")
+    
     order = Order.query.get(table.current_order_id)
     if not order:
-        return jsonify(success=False, message='Order not found')
-
+        print("❌ Order not found")
+        return jsonify(success=False, message="Order not found")
+    
     try:
         items = json.loads(order.items)
+        print(f"✅ Loaded {len(items)} items")
     except:
-        return jsonify(success=False, message='Error loading items')
-
+        print("❌ Error loading items")
+        return jsonify(success=False, message="Error loading items")
+    
     if not items:
-        return jsonify(success=False, message='No items in order')
-
-    # Split items by kitchen (if needed)
-    kitchen_1_cats = ['Shawarma', 'Beverages']  # Your categories
-    kitchen_1_items = [i for i in items if i.get('category') in kitchen_1_cats]
-    kitchen_2_items = [i for i in items if i.get('category') not in kitchen_1_cats]
-
+        print("❌ No items in order")
+        return jsonify(success=False, message="No items in order")
+    
+    # Split items by kitchen
+    kitchen1_cats = ['Shawarma']  # Your categories
+    kitchen1_items = [i for i in items if i.get('category') in kitchen1_cats]
+    kitchen2_items = [i for i in items if i.get('category') not in kitchen1_cats]
+    
     messages = []
     
     # Print to Kitchen 1
-    if kitchen_1_items:
-        content_1 = format_kot_content(order, kitchen_1_items)
-        success1, msg1 = print_kot_rawbt(content_1, kitchen_number=1, order_number=order.order_number)
-        messages.append(f"Kitchen 1: {msg1}")
+    if kitchen1_items:
+        print(f"🍳 Printing to Kitchen 1: {len(kitchen1_items)} items")
+        try:
+            content1 = format_kot_content(order, kitchen1_items)
+            print(f"✅ Content formatted ({len(content1)} chars)")
+            success1, msg1 = print_kot_rawbt(content1, kitchen_number=1, order_number=order.order_number)
+            print(f"📤 Kitchen 1 result: {success1} - {msg1}")
+            messages.append(f"Kitchen 1: {msg1}")
+        except Exception as e:
+            print(f"❌ Kitchen 1 error: {e}")
+            import traceback
+            traceback.print_exc()
+            messages.append(f"Kitchen 1: Error - {str(e)}")
     
     # Print to Kitchen 2
-    if kitchen_2_items:
-        content_2 = format_kot_content(order, kitchen_2_items)
-        success2, msg2 = print_kot_rawbt(content_2, kitchen_number=2, order_number=order.order_number)
-        messages.append(f"Kitchen 2: {msg2}")
+    if kitchen2_items:
+        print(f"🍳 Printing to Kitchen 2: {len(kitchen2_items)} items")
+        try:
+            content2 = format_kot_content(order, kitchen2_items)
+            print(f"✅ Content formatted ({len(content2)} chars)")
+            success2, msg2 = print_kot_rawbt(content2, kitchen_number=2, order_number=order.order_number)
+            print(f"📤 Kitchen 2 result: {success2} - {msg2}")
+            messages.append(f"Kitchen 2: {msg2}")
+        except Exception as e:
+            print(f"❌ Kitchen 2 error: {e}")
+            import traceback
+            traceback.print_exc()
+            messages.append(f"Kitchen 2: Error - {str(e)}")
     
     # Log the action
     db.session.add(Log(
         username=current_user.username,
         role=current_user.role,
-        action=f"Printed KOT for Order #{order.order_number}, Table {table.table_no}"
+        action=f"Printed KOT for Order {order.order_number}, Table {table.table_no}"
     ))
     db.session.commit()
     
-    return jsonify(success=True, message=' | '.join(messages))
+    print(f"✅ KOT printing complete")
+    print(f"{'='*60}\n")
+    
+    return jsonify(success=True, message='; '.join(messages))
+
 
 
 
@@ -752,6 +783,16 @@ def billing():
             .filter(Table.table_no == selected_table_no, Order.status.in_(['pending', 'served']))
             .first()
         )
+
+        if selected_order and selected_order.items:
+            items = json.loads(selected_order.items)
+            subtotal_amount = sum(i['qty'] * i['price'] for i in items)
+            discount_amount = selected_order.discount_amount or 0.0
+            total_amount = max(0, subtotal_amount - discount_amount)
+            
+            if selected_order.customer_mobile:
+                customer = Customer.query.filter_by(phone=selected_order.customer_mobile).first()
+    
 
         # ========================================
         # APPLY COUPON

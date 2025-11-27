@@ -1,30 +1,15 @@
-import os
 import json
 from datetime import datetime
 from models import db, Order, PrintJob, current_time_ist, Bill
 
-PRINTER_ENABLED = True
-
 # Import the bluetooth printing function
 from bluetooth_printer import print_bluetooth
 
-# ======= KITCHEN ORDER FUNCTIONS (KOT) =======
-def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
-    """Print KOT to Bluetooth printer."""
-    print(f"\n{'='*50}")
-    print(f"🍳 PRINTING KOT - Kitchen {kitchen_number} - Order #{order_number}")
-    print(f"{'='*50}")
-    
-    success, message = print_bluetooth(kot_content)
-    
-    print(f"Result: {message}")
-    print(f"{'='*50}\n")
-    
-    return success, message
+PRINTER_ENABLED = True
 
-
+# ========== KOT FUNCTIONS ==========
 def format_kot_content(order: Order, items: list) -> str:
-    """Format KOT content for thermal printer (32 characters wide)."""
+    """Format KOT for 58mm thermal printer (32 chars wide)."""
     lines = []
     lines.append("*** KITCHEN ORDER TICKET ***")
     lines.append("=" * 32)
@@ -55,14 +40,13 @@ def format_kot_content(order: Order, items: list) -> str:
     return "\n".join(lines)
 
 
-# ================ BILL PRINTING FUNCTIONS =====================
-def print_bill_rawbt(bill_content, bill_id):
-    """Print bill to Bluetooth printer."""
+def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
+    """Print KOT via file-based method."""
     print(f"\n{'='*50}")
-    print(f"💳 PRINTING BILL - Bill #{bill_id}")
+    print(f"🍳 PRINTING KOT - Kitchen {kitchen_number} - Order #{order_number}")
     print(f"{'='*50}")
     
-    success, message = print_bluetooth(bill_content)
+    success, message = print_bluetooth(kot_content)
     
     print(f"Result: {message}")
     print(f"{'='*50}\n")
@@ -70,8 +54,9 @@ def print_bill_rawbt(bill_content, bill_id):
     return success, message
 
 
+# ========== BILL FUNCTIONS ==========
 def format_bill_content(bill_data):
-    """Format bill content for thermal printer (32 characters wide)."""
+    """Format bill for 58mm thermal printer (32 chars wide)."""
     lines = []
     lines.append("      RESTAURANT BILL")
     lines.append("=" * 32)
@@ -112,6 +97,20 @@ def format_bill_content(bill_data):
     return "\n".join(lines)
 
 
+def print_bill_rawbt(bill_content, bill_id):
+    """Print bill via file-based method."""
+    print(f"\n{'='*50}")
+    print(f"💳 PRINTING BILL - Bill #{bill_id}")
+    print(f"{'='*50}")
+    
+    success, message = print_bluetooth(bill_content)
+    
+    print(f"Result: {message}")
+    print(f"{'='*50}\n")
+    
+    return success, message
+
+
 def print_bill(bill_id: int):
     """Print a bill by ID."""
     bill = db.session.get(Bill, bill_id)
@@ -143,7 +142,7 @@ def print_bill(bill_id: int):
     return print_bill_rawbt(content, bill.id)
 
 
-# ============== PRINT JOB SUPPORT ==============
+# ========== PRINT JOB SUPPORT ==========
 def create_kot_print_job(order_id: int):
     """Create a KOT print job in database."""
     order = Order.query.get(order_id)
