@@ -342,43 +342,53 @@ def calculate_discount(coupon, subtotal, items=None, customer=None):
             if not applicable_items:
                 return 0.0
 
-            # Calculate BOGO discount
-            # For each set of (buy_qty + get_qty), discount the price of get_qty items
+            # Create a list of individual items with their prices
+            # This allows us to sort by price and give away cheapest items
+            individual_items = []
             for item in applicable_items:
-                total_qty = item['qty']
-                sets = total_qty // (buy_qty + get_qty)
+                for _ in range(item['qty']):
+                    individual_items.append({
+                        'id': item['id'],
+                        'name': item.get('name', 'Item'),
+                        'price': item['price']
+                    })
 
-                if sets > 0:
-                    # Discount = price of free items
-                    free_items = sets * get_qty
-                    discount_amount += free_items * item['price']
+            # Sort by price (ascending - cheapest first)
+            individual_items.sort(key=lambda x: x['price'])
 
-            # Alternative: If any applicable items exist, give cheapest items free
-            # This is more common for "Buy 1 Get 1 Free" type offers
-            if discount_amount == 0 and applicable_items:
-                # Sort by price
-                sorted_items = sorted(applicable_items, key=lambda x: x['price'])
-                total_qty = sum(item['qty'] for item in applicable_items)
+            total_applicable_qty = len(individual_items)
 
-                sets = total_qty // (buy_qty + get_qty)
-                if sets > 0:
-                    # Give cheapest items free
-                    free_items_count = sets * get_qty
-                    items_to_discount = []
+            # Calculate how many free items customer gets
+            # Formula: For every (buy_qty + get_qty) items, get_qty are free
+            sets = total_applicable_qty // (buy_qty + get_qty)
 
-                    for item in sorted_items:
-                        if len(items_to_discount) >= free_items_count:
-                            break
-                        for _ in range(min(item['qty'], free_items_count - len(items_to_discount))):
-                            items_to_discount.append(item['price'])
+            if sets > 0:
+                # Number of items to discount
+                free_items_count = sets * get_qty
 
-                    discount_amount = sum(items_to_discount)
+                # Discount the cheapest items (first items in sorted list)
+                cheapest_items = individual_items[:free_items_count]
+                discount_amount = sum(item['price'] for item in cheapest_items)
+
+                print(f"BOGO Debug:")
+                print(f"  Total applicable items: {total_applicable_qty}")
+                print(f"  Buy {buy_qty} Get {get_qty}")
+                print(f"  Sets qualified: {sets}")
+                print(f"  Free items: {free_items_count}")
+                
+                # Format discounted items list separately
+                discounted_list = [f"{item['name']}: ₹{item['price']}" for item in cheapest_items]
+                print(f"  Items being discounted: {discounted_list}")
+                print(f"  Total discount: ₹{discount_amount}")
 
         except Exception as e:
             print(f"BOGO calculation error: {e}")
+            import traceback
+            traceback.print_exc()
             return 0.0
 
-    return round(discount_amount, 2)
+        return round(discount_amount, 2)
+
 
 
 # ============================================================
@@ -1306,12 +1316,31 @@ def admin_order_details(order_id):
     """View single order details."""
     if current_user.role != 'admin':
         return redirect(url_for('index'))
-
+    
     order = Order.query.get_or_404(order_id)
     items = json.loads(order.items) if order.items else []
     customer = Customer.query.filter_by(phone=order.customer_mobile).first() if order.customer_mobile else None
-
-    return render_template('admin_order_details.html', order=order, items=items, customer=customer)
+    
+    # Calculate subtotal
+    subtotal = sum(item['qty'] * item['price'] for item in items)
+    
+    # Get discount from order
+    discount = order.discount_amount or 0.0
+    
+    # Calculate total
+    total = max(0, subtotal - discount)
+    
+    # Check if bill exists for this order
+    bill = Bill.query.filter_by(order_id=order.id).first()
+    
+    return render_template('admin_order_details.html', 
+                         order=order, 
+                         items=items, 
+                         customer=customer,
+                         subtotal=subtotal,
+                         discount=discount,
+                         total=total,
+                         bill=bill)
 
 
 @app.route('/admin/orders/export')

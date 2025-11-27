@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 # ✅ Point to the actual Flask DB path (inside /instance)
 DB_PATH = os.path.join(app.instance_path, 'database.db')
 
-
 def init_db():
     # Remove old instance database
     if os.path.exists(DB_PATH):
@@ -58,7 +57,7 @@ def init_db():
 
         # Delivery entry
         delivery = Table(
-            table_no='D0',
+            table_no='Parcel',
             status='available',
             locked=False,
             is_delivery=True
@@ -66,82 +65,77 @@ def init_db():
         db.session.add(delivery)
         print("   ✓ Added delivery entry D0")
 
+        delivery = Table(
+            table_no='Takeaway',
+            status='available',
+            locked=False,
+            is_delivery=True
+        )
+        db.session.add(delivery)
+
         # ========================================
         # ADD COMPREHENSIVE MENU ITEMS
         # ========================================
         print("\n🍽️ Adding menu items...")
 
         menu_items = [
-            # ===== STARTERS & APPETIZERS =====
-            MenuItem(name='Spring Rolls (Veg)', price=129, category='Starters', available=True, created_by=1),
-            MenuItem(name='Chicken Wings (6pc)', price=249, category='Starters', available=True, created_by=1),
-            MenuItem(name='Paneer Tikka', price=199, category='Starters', available=True, created_by=1),
-            MenuItem(name='Fish Fingers', price=279, category='Starters', available=True, created_by=1),
-            MenuItem(name='Crispy Corn', price=149, category='Starters', available=True, created_by=1),
-            MenuItem(name='Cheese Garlic Bread', price=119, category='Starters', available=True, created_by=1),
-
-            # ===== SHAWARMA (Your specialty!) =====
-            MenuItem(name='Chicken Shawarma', price=150, category='Shawarma', available=True, created_by=1),
-            MenuItem(name='Mutton Shawarma', price=180, category='Shawarma', available=True, created_by=1),
-            MenuItem(name='Paneer Shawarma', price=130, category='Shawarma', available=True, created_by=1),
-            MenuItem(name='Falafel Shawarma', price=120, category='Shawarma', available=True, created_by=1),
-            MenuItem(name='Chicken Shawarma Platter', price=299, category='Shawarma', available=True, created_by=1),
-
-            # ===== PIZZA =====
-            MenuItem(name='Margherita Pizza', price=249, category='Pizza', available=True, created_by=1),
-            MenuItem(name='Pepperoni Pizza', price=349, category='Pizza', available=True, created_by=1),
-            MenuItem(name='Veggie Supreme Pizza', price=299, category='Pizza', available=True, created_by=1),
-            MenuItem(name='BBQ Chicken Pizza', price=399, category='Pizza', available=True, created_by=1),
-            MenuItem(name='Paneer Tikka Pizza', price=329, category='Pizza', available=True, created_by=1),
+            # ===== SHAWARMA =====
+            MenuItem(name='Classic Shawarma', category='Shawarma', price=100.0),
+            MenuItem(name='Plain Shawarma', category='Shawarma', price=120.0),
+            MenuItem(name='Mexican Shawarma', category='Shawarma', price=140.0),
+            MenuItem(name='Turkish Shawarma', category='Shawarma', price=140.0),
+            MenuItem(name='American Shawarma', category='Shawarma', price=150.0),
+            MenuItem(name='Cheesy Bomb Shawarma', category='Shawarma', price=180.0),
+            MenuItem(name='Honey Mustard Shawarma', category='Shawarma', price=140.0),
+            MenuItem(name='Full Meat Shawarma', category='Shawarma', price=160.0),
+            MenuItem(name='Loaded Shawarma', category='Shawarma', price=180.0),
+            MenuItem(name='Burger Shawarma', category='Shawarma', price=150.0),
+            MenuItem(name='Moroccan Shawarma', category='Shawarma', price=150.0),
+            MenuItem(name='Lays Shawarma', category='Shawarma', price=130.0),
+            MenuItem(name='Pani Puri Shawarma', category='Shawarma', price=120.0),
+            MenuItem(name='Persion Shawarma', category='Shawarma', price=160.0),
+            MenuItem(name='Fire Bird Shawarma', category='Shawarma', price=150.0),
 
             # ===== BURGERS =====
-            MenuItem(name='Classic Veg Burger', price=99, category='Burger', available=True, created_by=1),
-            MenuItem(name='Chicken Burger', price=149, category='Burger', available=True, created_by=1),
-            MenuItem(name='Cheese Burger', price=179, category='Burger', available=True, created_by=1),
-            MenuItem(name='Mushroom Swiss Burger', price=199, category='Burger', available=True, created_by=1),
-            MenuItem(name='Double Patty Burger', price=229, category='Burger', available=True, created_by=1),
+            MenuItem(name='Chicken Burger', category='Burger', price=120.0),
+            MenuItem(name='Beef Burger', category='Burger', price=140.0),
+            MenuItem(name='Zinger Burger', category='Burger', price=160.0),
+            MenuItem(name='Chicken Cheese Burger', category='Burger', price=140.0),
+            MenuItem(name='Beef Cheese Burger', category='Burger', price=160.0),
+            MenuItem(name='Double Patty Burger', category='Burger', price=160.0),
+            MenuItem(name='Monster Burger', category='Burger', price=180.0),
+            
+            # ===== STARTERS =====
+            MenuItem(name='French Fries', category='Starters', price=90.0),
+            MenuItem(name='Peri Peri Fries', category='Starters', price=120.0),
+            MenuItem(name='Chicken Dynamite', category='Starters', price=180.0),
+            MenuItem(name='Wings Dynamite', category='Starters', price=220.0),
+            MenuItem(name='Brownie with Ice Cream', category='Starters', price=100.0),
 
-            # ===== PASTA & NOODLES =====
-            MenuItem(name='Pasta Alfredo', price=249, category='Pasta', available=True, created_by=1),
-            MenuItem(name='Pasta Arrabiata', price=229, category='Pasta', available=True, created_by=1),
-            MenuItem(name='Mac & Cheese', price=199, category='Pasta', available=True, created_by=1),
-            MenuItem(name='Hakka Noodles (Veg)', price=149, category='Noodles', available=True, created_by=1),
-            MenuItem(name='Hakka Noodles (Chicken)', price=189, category='Noodles', available=True, created_by=1),
+            # ===== Mojitos =====
+            MenuItem(name='Green Apple', category='Mojitos', price=80.0),
+            MenuItem(name='Blue Coracao', category='Mojitos', price=80.0),
+            MenuItem(name='Passion Fruit', category='Mojitos', price=80.0),
+            MenuItem(name='Pineapple', category='Mojitos', price=80.0),
 
-            # ===== RICE & BIRYANI =====
-            MenuItem(name='Veg Biryani', price=179, category='Rice', available=True, created_by=1),
-            MenuItem(name='Chicken Biryani', price=229, category='Rice', available=True, created_by=1),
-            MenuItem(name='Mutton Biryani', price=279, category='Rice', available=True, created_by=1),
-            MenuItem(name='Egg Fried Rice', price=159, category='Rice', available=True, created_by=1),
-            MenuItem(name='Chicken Fried Rice', price=189, category='Rice', available=True, created_by=1),
+            # ===== LIME =====
+            MenuItem(name='Fesh Lime', category='Lime', price=25.0),
+            MenuItem(name='Pineapple Lime', category='Lime', price=30.0),
+            MenuItem(name='Blue Lime', category='Lime', price=30.0),
+            MenuItem(name='Mint Lime', category='Lime', price=30.0),
 
-            # ===== SNACKS & SIDES =====
-            MenuItem(name='French Fries', price=89, category='Snacks', available=True, created_by=1),
-            MenuItem(name='Peri Peri Fries', price=109, category='Snacks', available=True, created_by=1),
-            MenuItem(name='Onion Rings', price=99, category='Snacks', available=True, created_by=1),
-            MenuItem(name='Nachos with Cheese', price=149, category='Snacks', available=True, created_by=1),
-            MenuItem(name='Chicken Nuggets (6pc)', price=159, category='Snacks', available=True, created_by=1),
+            # ===== Milkshakes =====
+            MenuItem(name='Kitkat', category='Milkshakes', price=100.0),
+            MenuItem(name='Brownie', category='Milkshakes', price=120.0),
+            MenuItem(name='Oreo', category='Milkshakes', price=90.0),
+            MenuItem(name='Tender Coconut', category='Milkshakes', price=90.0),
+            MenuItem(name='Peanut Butter', category='Milkshakes', price=120.0),
+            MenuItem(name='Avacado', category='Milkshakes', price=110.0),
 
-            # ===== BEVERAGES - Cold =====
-            MenuItem(name='Cold Coffee', price=89, category='Beverage', available=True, created_by=1),
-            MenuItem(name='Chocolate Milkshake', price=129, category='Beverage', available=True, created_by=1),
-            MenuItem(name='Mango Shake', price=119, category='Beverage', available=True, created_by=1),
-            MenuItem(name='Fresh Lime Soda', price=69, category='Beverage', available=True, created_by=1),
-            MenuItem(name='Virgin Mojito', price=99, category='Beverage', available=True, created_by=1),
-            MenuItem(name='Coca Cola', price=49, category='Beverage', available=True, created_by=1),
-            MenuItem(name='Sprite', price=49, category='Beverage', available=True, created_by=1),
-
-            # ===== BEVERAGES - Hot =====
-            MenuItem(name='Masala Tea', price=39, category='Hot Beverage', available=True, created_by=1),
-            MenuItem(name='Coffee', price=49, category='Hot Beverage', available=True, created_by=1),
-            MenuItem(name='Cappuccino', price=89, category='Hot Beverage', available=True, created_by=1),
-            MenuItem(name='Hot Chocolate', price=99, category='Hot Beverage', available=True, created_by=1),
-
-            # ===== DESSERTS =====
-            MenuItem(name='Chocolate Brownie', price=99, category='Dessert', available=True, created_by=1),
-            MenuItem(name='Ice Cream (2 Scoops)', price=79, category='Dessert', available=True, created_by=1),
-            MenuItem(name='Gulab Jamun (3pc)', price=59, category='Dessert', available=True, created_by=1),
-            MenuItem(name='Chocolate Lava Cake', price=129, category='Dessert', available=True, created_by=1),
+            # ===== MONSTER SHAKES =====
+            MenuItem(name='Kitkat Monster', category='Monster Shakes', price=180.0),
+            MenuItem(name='Brownie Monster', category='Monster Shakes', price=180.0),
+            MenuItem(name='Oreo Monster', category='Monster Shakes', price=180.0),
         ]
 
         db.session.add_all(menu_items)
@@ -170,8 +164,8 @@ def init_db():
         shawarma_items = MenuItem.query.filter_by(category='Shawarma').all()
         shawarma_ids = [item.id for item in shawarma_items[:3]]
 
-        pizza_items = MenuItem.query.filter_by(category='Pizza').all()
-        pizza_ids = [item.id for item in pizza_items[:3]]
+        Burger_items = MenuItem.query.filter_by(category='Burger').all()
+        burger_ids = [item.id for item in Burger_items[:2]]
 
         coupons = [
             # ===== FLAT DISCOUNTS =====
@@ -219,17 +213,6 @@ def init_db():
                 current_uses=0,
                 created_by=1
             ),
-            Coupon(
-                code='VIP25',
-                discount_type='percent',
-                value=25.0,
-                min_amount=1000.0,
-                max_discount=500.0,
-                is_active=True,
-                max_uses=50,
-                current_uses=0,
-                created_by=1
-            ),
 
             # ===== BOGO OFFERS =====
             Coupon(
@@ -245,11 +228,11 @@ def init_db():
                 created_by=1
             ),
             Coupon(
-                code='PIZZA_BOGO',
+                code='BUZZBURGER',
                 discount_type='bogo',
                 bogo_buy_quantity=1,
                 bogo_get_quantity=1,
-                bogo_item_ids=json.dumps(pizza_ids),
+                bogo_item_ids=json.dumps(burger_ids),
                 min_amount=300.0,
                 is_active=True,
                 max_uses=150,
@@ -261,7 +244,7 @@ def init_db():
                 discount_type='bogo',
                 bogo_buy_quantity=2,
                 bogo_get_quantity=1,
-                bogo_item_ids=json.dumps(shawarma_ids + pizza_ids),
+                bogo_item_ids=json.dumps(shawarma_ids + burger_ids),
                 min_amount=400.0,
                 is_active=True,
                 max_uses=100,
@@ -277,16 +260,6 @@ def init_db():
                 frequency_discount_percent=20.0,
                 min_amount=200.0,
                 max_discount=500.0,
-                is_active=True,
-                created_by=1
-            ),
-            Coupon(
-                code='LOYAL10',
-                discount_type='frequency',
-                frequency_nth_order=10,
-                frequency_discount_percent=30.0,
-                min_amount=300.0,
-                max_discount=1000.0,
                 is_active=True,
                 created_by=1
             ),

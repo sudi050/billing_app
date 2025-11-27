@@ -1,339 +1,334 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container mt-4">
-    <h2>💳 Billing</h2>
+  <h2>💳 Billing</h2>
 
-    <!-- Print Bill Button (appears after bill generation) -->
-    {% if session.get('last_bill_content') %}
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <h5 class="alert-heading">
-            <i class="bi bi-check-circle-fill"></i> Bill #{{ session.get('last_bill_id') }} Generated!
-        </h5>
-        <p class="mb-3">Tap the button below to print with RawBT:</p>
-        <button onclick="printBillWithRawBT()" class="btn btn-success btn-lg">
-            <i class="bi bi-printer-fill"></i> Print Bill with RawBT
-        </button>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  <div class="row mt-3">
+    <div class="col-md-4">
+      <h4>Locked Tables</h4>
+      <ul class="list-group">
+        {% for t in tables %}
+        <li class="list-group-item {% if t.table_no == selected_table_no %}active{% endif %}">
+          <a href="{{ url_for('billing', table_no=t.table_no) }}"
+              class="text-decoration-none {% if t.table_no == selected_table_no %}text-white{% else %}text-reset{% endif %}">
+            Table {{ t.table_no }}
+          </a>
+        </li>
+        {% endfor %}
+
+        {% if delivery_table %}
+        <li class="list-group-item {% if delivery_table.table_no == selected_table_no %}active{% endif %}">
+          <a href="{{ url_for('billing', table_no=delivery_table.table_no) }}"
+              class="text-decoration-none {% if delivery_table.table_no == selected_table_no %}text-white{% else %}text-reset{% endif %}">
+            🚚 Delivery Orders
+          </a>
+        </li>
+        {% endif %}
+      </ul>
     </div>
-    
-    <script>
-    const billContent = {{ session.get('last_bill_content')|tojson }};
-    {{ session.pop('last_bill_content', None) and "" }}
-    {{ session.pop('last_bill_id', None) and "" }}
-    
-    async function printBillWithRawBT() {
-        try {
-            if (navigator.share) {
-                await navigator.share({
-                    title: 'Restaurant Bill',
-                    text: billContent
-                });
-                console.log('✅ Bill shared successfully');
-            } else {
-                await navigator.clipboard.writeText(billContent);
-                alert('📋 Bill copied to clipboard!\n\nOpen RawBT app and paste to print.');
-            }
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.error('Share error:', error);
-                try {
-                    await navigator.clipboard.writeText(billContent);
-                    alert('📋 Bill copied to clipboard!\n\nOpen RawBT app and paste to print.');
-                } catch (e) {
-                    alert('⚠️ Unable to share or copy. Please try again.');
-                }
-            }
-        }
-    }
-    </script>
-    {% endif %}
 
-    <div class="row mt-3">
-        <div class="col-md-4">
-            <h4>Locked Tables</h4>
-            <ul class="list-group">
-                {% for t in tables %}
-                <li class="list-group-item {% if t.table_no == selected_table_no %}active{% endif %}">
-                    <a href="{{ url_for('billing', table_no=t.table_no) }}"
-                        class="text-decoration-none {% if t.table_no == selected_table_no %}text-white{% else %}text-reset{% endif %}">
-                        Table {{ t.table_no }}
-                    </a>
-                </li>
-                {% endfor %}
-
-                {% if delivery_table %}
-                <li class="list-group-item {% if delivery_table.table_no == selected_table_no %}active{% endif %}">
-                    <a href="{{ url_for('billing', table_no=delivery_table.table_no) }}"
-                        class="text-decoration-none {% if delivery_table.table_no == selected_table_no %}text-white{% else %}text-reset{% endif %}">
-                        🚚 Delivery Orders
-                    </a>
-                </li>
-                {% endif %}
-            </ul>
+    <div class="col-md-8">
+      {% if selected_order %}
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h4 class="mb-0">Order #{{ selected_order.order_number }} - Table {{ selected_table_no }}</h4>
         </div>
+        <div class="card-body">
+          <!-- Order Items Table -->
+          <table class="table table-bordered table-hover mt-3">
+            <thead class="table-light">
+              <tr>
+                <th>Item</th>
+                <th class="text-center">Qty</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td class="text-center">{{ item.qty }}</td>
+                <td class="text-end">₹{{ "%.2f"|format(item.price) }}</td>
+                <td class="text-end">₹{{ "%.2f"|format(item.qty * item.price) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colspan="3" class="text-end">Subtotal</th>
+                <th class="text-end">₹{{ "%.2f"|format(subtotal_amount) }}</th>
+              </tr>
+              {% if discount_amount > 0 %}
+              <tr class="table-warning">
+                <th colspan="3" class="text-end text-danger">
+                  Discount
+                  {% if selected_order.coupon_code %}
+                  <span class="badge bg-warning text-dark">{{ selected_order.coupon_code }}</span>
+                  {% endif %}
+                </th>
+                <th class="text-end text-danger">- ₹{{ "%.2f"|format(discount_amount) }}</th>
+              </tr>
+              {% endif %}
+              <tr class="table-success">
+                <th colspan="3" class="text-end">Grand Total</th>
+                <th class="text-end fs-5">₹{{ "%.2f"|format(total_amount) }}</th>
+              </tr>
+            </tfoot>
+          </table>
 
-        <div class="col-md-8">
-            {% if selected_order %}
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Order #{{ selected_order.order_number }} - Table {{ selected_table_no }}</h4>
-                </div>
-                <div class="card-body">
-                    <!-- Order Items Table -->
-                    <table class="table table-bordered table-hover mt-3">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Item</th>
-                                <th class="text-center">Qty</th>
-                                <th class="text-end">Price</th>
-                                <th class="text-end">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in items %}
-                            <tr>
-                                <td>{{ item.name }}</td>
-                                <td class="text-center">{{ item.qty }}</td>
-                                <td class="text-end">₹{{ "%.2f"|format(item.price) }}</td>
-                                <td class="text-end">₹{{ "%.2f"|format(item.qty * item.price) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <th colspan="3" class="text-end">Subtotal</th>
-                                <th class="text-end">₹{{ "%.2f"|format(subtotal_amount) }}</th>
-                            </tr>
-                            {% if discount_amount > 0 %}
-                            <tr class="table-warning">
-                                <th colspan="3" class="text-end text-danger">
-                                    Discount
-                                    {% if selected_order.coupon_code %}
-                                    <span class="badge bg-warning text-dark">{{ selected_order.coupon_code }}</span>
-                                    {% endif %}
-                                </th>
-                                <th class="text-end text-danger">- ₹{{ "%.2f"|format(discount_amount) }}</th>
-                            </tr>
-                            {% endif %}
-                            <tr class="table-success">
-                                <th colspan="3" class="text-end">Grand Total</th>
-                                <th class="text-end fs-5">₹{{ "%.2f"|format(total_amount) }}</th>
-                            </tr>
-                        </tfoot>
-                    </table>
-
-                    <!-- Customer Details -->
-                    <div class="card mt-4">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">👤 Customer Details</h5>
-                        </div>
-                        <div class="card-body">
-                            {% if customer %}
-                            <div class="alert alert-success">
-                                <strong>✓ Returning Customer</strong><br>
-                                Name: {{ customer.name }}<br>
-                                Total Orders: {{ customer.total_visits }}<br>
-                                Lifetime Spent: ₹{{ "%.2f"|format(customer.total_spent) }}<br>
-                                Last Visit: {{ customer.last_visit.strftime('%d-%b-%Y') if customer.last_visit else 'N/A' }}
-                            </div>
-                            {% endif %}
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Phone Number <span class="text-muted">(Optional)</span></label>
-                                    <input type="tel" name="customer_mobile" id="customer_mobile" class="form-control"
-                                        placeholder="10-digit mobile number" pattern="[0-9]{10}" maxlength="10"
-                                        value="{{ selected_order.customer_mobile if selected_order and selected_order.customer_mobile else '' }}">
-                                    <small class="text-muted">For loyalty tracking and coupons</small>
-                                </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Customer Name <span class="text-muted">(Optional)</span></label>
-                                    <input type="text" name="customer_name" id="customer_name" class="form-control"
-                                        placeholder="Enter customer name"
-                                        value="{{ selected_order.customer_name if selected_order and selected_order.customer_name else (customer.name if customer else '') }}">
-                                    <small class="text-muted">Leave empty for walk-in customers</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Coupon Section -->
-                    <div class="card mt-4">
-                        <div class="card-header bg-warning text-dark">
-                            <h5 class="mb-0">🎟️ Apply Coupon</h5>
-                        </div>
-                        <div class="card-body">
-                            {% if selected_order.coupon_code %}
-                            <div class="alert alert-success d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>✓ Coupon Applied:</strong> {{ selected_order.coupon_code }}
-                                    <br>
-                                    <small>Discount: ₹{{ "%.2f"|format(selected_order.discount_amount or 0) }}</small>
-                                </div>
-                                <form method="POST" style="display:inline;">
-                                    <input type="hidden" name="table_no" value="{{ selected_table_no }}">
-                                    <button type="submit" name="remove_coupon" value="1" class="btn btn-sm btn-outline-danger">
-                                        Remove
-                                    </button>
-                                </form>
-                            </div>
-                            {% else %}
-                            <form method="POST" id="applyCouponForm">
-                                <input type="hidden" name="table_no" value="{{ selected_table_no }}">
-                                <input type="hidden" name="customer_mobile" id="hiddenMobile" value="">
-                                <input type="hidden" name="customer_name" id="hiddenName" value="">
-                                
-                                {% if available_coupons %}
-                                <div class="mb-3">
-                                    <label class="form-label">Select Coupon</label>
-                                    <select id="couponSelect" class="form-select">
-                                        <option value="">-- Select a coupon --</option>
-                                        {% for coupon in available_coupons %}
-                                        <option value="{{ coupon.code }}">
-                                            {{ coupon.code }}
-                                            {% if coupon.discount_type == 'percent' %}
-                                            - {{ coupon.value }}% off
-                                            {% elif coupon.discount_type == 'flat' %}
-                                            - ₹{{ coupon.value }} off
-                                            {% elif coupon.discount_type == 'bogo' %}
-                                            - Buy {{ coupon.bogo_buy_quantity }} Get {{ coupon.bogo_get_quantity }}
-                                            {% elif coupon.discount_type == 'frequency' %}
-                                            - Every {{ coupon.frequency_nth_order }}th order
-                                            {% endif %}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-
-                                <div class="text-center mb-2">OR</div>
-                                {% endif %}
-
-                                <div class="mb-3">
-                                    <label class="form-label">Enter Coupon Code</label>
-                                    <input type="text" id="couponManual" name="coupon_code_manual" class="form-control"
-                                        placeholder="Enter coupon code" style="text-transform: uppercase;" autocomplete="off">
-                                </div>
-
-                                <button type="submit" name="apply_coupon" value="1" class="btn btn-warning w-100">
-                                    🎟️ Apply Coupon
-                                </button>
-                            </form>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <!-- Generate Bill Button -->
-                    <div class="card mt-4">
-                        <div class="card-body">
-                            <form method="POST">
-                                <input type="hidden" name="table_no" value="{{ selected_table_no }}">
-                                <input type="hidden" name="customer_mobile" value="{{ selected_order.customer_mobile if selected_order and selected_order.customer_mobile else '' }}">
-                                <input type="hidden" name="customer_name" value="{{ selected_order.customer_name if selected_order and selected_order.customer_name else '' }}">
-                                
-                                <div class="d-grid gap-2">
-                                    <button type="submit" name="generate_bill" class="btn btn-success btn-lg">
-                                        <i class="bi bi-receipt"></i> Generate Bill & Print
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+          <!-- Customer Details -->
+          <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+              <h5 class="mb-0">👤 Customer Details</h5>
             </div>
-            {% else %}
-            <div class="alert alert-info mt-4" role="alert">
-                <h5 class="alert-heading">No Order Selected</h5>
-                <p class="mb-0">Please select a locked table from the left sidebar to view and process its order.</p>
+            <div class="card-body">
+              {% if customer %}
+              <div class="alert alert-success">
+                <strong>✓ Returning Customer</strong><br>
+                Name: {{ customer.name }}<br>
+                Total Orders: {{ customer.total_visits }}<br>
+                Lifetime Spent: ₹{{ "%.2f"|format(customer.total_spent) }}<br>
+                Last Visit: {{ customer.last_visit.strftime('%d-%b-%Y') if customer.last_visit else 'N/A' }}
+              </div>
+              {% endif %}
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Phone Number <span class="text-muted">(Optional)</span></label>
+                  <input type="tel" name="customer_mobile" id="customer_mobile" class="form-control"
+                      placeholder="10-digit mobile number" pattern="[0-9]{10}" maxlength="10"
+                      value="{{ selected_order.customer_mobile if selected_order and selected_order.customer_mobile else '' }}">
+                  <small class="text-muted">For loyalty tracking and coupons</small>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Customer Name <span class="text-muted">(Optional)</span></label>
+                  <input type="text" name="customer_name" id="customer_name" class="form-control"
+                      placeholder="Enter customer name"
+                      value="{{ selected_order.customer_name if selected_order and selected_order.customer_name else (customer.name if customer else '') }}">
+                  <small class="text-muted">Leave empty for walk-in customers</small>
+                </div>
+              </div>
             </div>
-            {% endif %}
+          </div>
+
+          <!-- Coupon Section -->
+          <div class="card mt-4">
+            <div class="card-header bg-warning text-dark">
+              <h5 class="mb-0">🎟️ Apply Coupon</h5>
+            </div>
+            <div class="card-body">
+              {% if selected_order.coupon_code %}
+              <!-- Coupon Applied -->
+              <div class="alert alert-success d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>✓ Coupon Applied:</strong> {{ selected_order.coupon_code }}
+                  <br>
+                  <small>Discount: ₹{{ "%.2f"|format(selected_order.discount_amount or 0) }}</small>
+                </div>
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="table_no" value="{{ selected_table_no }}">
+                  <button type="submit" name="remove_coupon" value="1" class="btn btn-sm btn-outline-danger">
+                    Remove
+                  </button>
+                </form>
+              </div>
+              {% else %}
+              
+              <!-- Available Coupons List -->
+              {% if available_coupons %}
+              <div class="alert alert-info mb-3">
+                <h6 class="alert-heading mb-2"><i class="bi bi-tag-fill"></i> Available Coupons for this Order</h6>
+                <div class="list-group list-group-flush">
+                  {% for coupon in available_coupons %}
+                  <div class="list-group-item list-group-item-action p-2" 
+                       style="cursor: pointer; border-left: 4px solid #ffc107;"
+                       onclick="selectCoupon('{{ coupon.code }}')">
+                    <div class="d-flex justify-content-between align-items-start">
+                      <div>
+                        <h6 class="mb-1">
+                          <span class="badge bg-warning text-dark">{{ coupon.code }}</span>
+                        </h6>
+                        <p class="mb-1 small">
+                          {% if coupon.discount_type == 'percent' %}
+                          <strong>{{ coupon.value }}% OFF</strong>
+                          {% if coupon.max_discount %}
+                          (Max: ₹{{ coupon.max_discount }})
+                          {% endif %}
+                          {% elif coupon.discount_type == 'flat' %}
+                          <strong>₹{{ coupon.value }} OFF</strong>
+                          {% elif coupon.discount_type == 'bogo' %}
+                          <strong>Buy {{ coupon.bogo_buy_quantity }} Get {{ coupon.bogo_get_quantity }} FREE</strong>
+                          {% elif coupon.discount_type == 'frequency' %}
+                          <strong>{{ coupon.frequency_discount_percent }}% OFF</strong> every {{ coupon.frequency_nth_order }}th order
+                          {% endif %}
+                        </p>
+                        {% if coupon.min_amount > 0 %}
+                        <small class="text-muted">Min order: ₹{{ coupon.min_amount }}</small>
+                        {% endif %}
+                      </div>
+                      <button type="button" class="btn btn-sm btn-outline-warning" 
+                              onclick="selectCoupon('{{ coupon.code }}'); event.stopPropagation();">
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% else %}
+              <div class="alert alert-secondary mb-3">
+                <i class="bi bi-info-circle"></i> No coupons available for this order amount.
+              </div>
+              {% endif %}
+
+              <!-- Apply Coupon Form -->
+              <form method="POST" id="applyCouponForm">
+                <input type="hidden" name="table_no" value="{{ selected_table_no }}">
+                <input type="hidden" name="customer_mobile" id="hidden_mobile" value="">
+                <input type="hidden" name="customer_name" id="hidden_name" value="">
+                
+                <div class="mb-3">
+                  <label class="form-label">Enter Coupon Code</label>
+                  <div class="input-group">
+                    <input type="text" id="coupon_manual" name="coupon_code_manual" class="form-control"
+                        placeholder="Enter coupon code" style="text-transform: uppercase;" autocomplete="off" required>
+                    <button type="submit" name="apply_coupon" value="1" class="btn btn-warning">
+                      <i class="bi bi-check-lg"></i> Apply
+                    </button>
+                  </div>
+                  <small class="text-muted">Click on a coupon above or type manually</small>
+                </div>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Generate Bill Button -->
+          <div class="card mt-4">
+            <div class="card-body">
+              <form method="POST" id="generateBillForm">
+                <input type="hidden" name="table_no" value="{{ selected_table_no }}">
+                <input type="hidden" name="customer_mobile" id="final_mobile" 
+                       value="{{ selected_order.customer_mobile if selected_order and selected_order.customer_mobile else '' }}">
+                <input type="hidden" name="customer_name" id="final_name"
+                       value="{{ selected_order.customer_name if selected_order and selected_order.customer_name else '' }}">
+                
+                <div class="d-grid gap-2">
+                  <button type="submit" name="generate_bill" class="btn btn-success btn-lg">
+                    <i class="bi bi-receipt"></i> Generate Bill & Print
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
+      </div>
+      {% else %}
+      <div class="alert alert-info mt-4" role="alert">
+        <h5 class="alert-heading">No Order Selected</h5>
+        <p class="mb-0">Please select a locked table from the left sidebar to view and process its order.</p>
+      </div>
+      {% endif %}
     </div>
+  </div>
 </div>
 
 <style>
-    .list-group-item.active a {
-        color: white !important;
-    }
+  .list-group-item.active a {
+    color: white !important;
+  }
 
-    .table tfoot tr th {
-        border-top: 2px solid #dee2e6;
-    }
+  .table tfoot tr th {
+    border-top: 2px solid #dee2e6;
+  }
 
-    .badge {
-        font-size: 0.9em;
-    }
+  .badge {
+    font-size: 0.9em;
+  }
+  
+  .list-group-item-action:hover {
+    background-color: #fff3cd;
+  }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const couponSelect = document.getElementById('couponSelect');
-    const couponManual = document.getElementById('couponManual');
-    const customerMobile = document.getElementById('customer_mobile');
-    const customerName = document.getElementById('customer_name');
-    const hiddenMobile = document.getElementById('hiddenMobile');
-    const hiddenName = document.getElementById('hiddenName');
-    
-    // Initialize hidden fields
-    if (customerMobile && hiddenMobile) {
-        hiddenMobile.value = customerMobile.value;
+  const couponManual = document.getElementById('coupon_manual');
+  const customerMobile = document.getElementById('customer_mobile');
+  const customerName = document.getElementById('customer_name');
+  const hiddenMobile = document.getElementById('hidden_mobile');
+  const hiddenName = document.getElementById('hidden_name');
+  const finalMobile = document.getElementById('final_mobile');
+  const finalName = document.getElementById('final_name');
+  
+  // Initialize hidden fields with current customer data
+  function syncCustomerData() {
+    if (customerMobile && hiddenMobile && finalMobile) {
+      hiddenMobile.value = customerMobile.value;
+      finalMobile.value = customerMobile.value;
     }
-    if (customerName && hiddenName) {
-        hiddenName.value = customerName.value;
+    if (customerName && hiddenName && finalName) {
+      hiddenName.value = customerName.value;
+      finalName.value = customerName.value;
     }
-    
-    // Sync customer data
-    if (customerMobile) {
-        customerMobile.addEventListener('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, '');
-            if (hiddenMobile) {
-                hiddenMobile.value = this.value;
-            }
-        });
-    }
-    
-    if (customerName) {
-        customerName.addEventListener('input', function() {
-            if (hiddenName) {
-                hiddenName.value = this.value;
-            }
-        });
-    }
-    
-    // Dropdown to manual input sync
-    if (couponSelect && couponManual) {
-        couponSelect.addEventListener('change', function() {
-            if (this.value) {
-                couponManual.value = this.value;
-            }
-        });
-        
-        couponManual.addEventListener('input', function() {
-            if (this.value) {
-                couponSelect.value = '';
-            }
-            this.value = this.value.toUpperCase();
-        });
-    }
+  }
+  
+  // Initial sync
+  syncCustomerData();
+  
+  // Sync on customer input changes
+  if (customerMobile) {
+    customerMobile.addEventListener('input', function() {
+      this.value = this.value.replace(/[^0-9]/g, '');
+      syncCustomerData();
+    });
+  }
+  
+  if (customerName) {
+    customerName.addEventListener('input', function() {
+      syncCustomerData();
+    });
+  }
+  
+  // Coupon manual input - force uppercase
+  if (couponManual) {
+    couponManual.addEventListener('input', function() {
+      this.value = this.value.toUpperCase();
+    });
+  }
 
-    // Form submission
-    const applyCouponForm = document.getElementById('applyCouponForm');
-    if (applyCouponForm) {
-        applyCouponForm.addEventListener('submit', function(e) {
-            if (customerMobile && hiddenMobile) {
-                hiddenMobile.value = customerMobile.value;
-            }
-            if (customerName && hiddenName) {
-                hiddenName.value = customerName.value;
-            }
-            
-            if (!couponManual || !couponManual.value || couponManual.value.trim() === '') {
-                e.preventDefault();
-                alert('⚠️ Please select or enter a coupon code');
-                return false;
-            }
-        });
-    }
+  // Form submission - sync one more time
+  const applyCouponForm = document.getElementById('applyCouponForm');
+  if (applyCouponForm) {
+    applyCouponForm.addEventListener('submit', function(e) {
+      syncCustomerData();
+      
+      if (!couponManual || !couponManual.value || couponManual.value.trim() === '') {
+        e.preventDefault();
+        alert('⚠️ Please enter a coupon code');
+        return false;
+      }
+    });
+  }
+  
+  // Generate bill form - sync before submit
+  const generateBillForm = document.getElementById('generateBillForm');
+  if (generateBillForm) {
+    generateBillForm.addEventListener('submit', function() {
+      syncCustomerData();
+    });
+  }
 });
+
+// Function to select coupon from list
+function selectCoupon(code) {
+  const couponInput = document.getElementById('coupon_manual');
+  if (couponInput) {
+    couponInput.value = code;
+    couponInput.focus();
+  }
+}
 </script>
 {% endblock %}

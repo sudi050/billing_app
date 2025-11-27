@@ -49,23 +49,58 @@
       {% endfor %}
     </tbody>
   </table>
+  
+  <!-- Print KOT Button -->
   <button id="btnPrintKOT" class="btn btn-primary mt-2" data-table-id="{{ selected_table.id }}">
-    Print KOT
+    🖨️ Print KOT
   </button>
+  
+  <!-- Status message area -->
+  <div id="printStatus" class="mt-3"></div>
+  
   {% else %}
     <p>No items in cart yet.</p>
   {% endif %}
 
   <hr>
-  <h5>Menu</h5>
+  
+  <!-- Menu Section with Search -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">Menu</h5>
+    <div class="badge bg-secondary" id="searchResultCount" style="display: none;">
+      <span id="resultCount">0</span> items found
+    </div>
+  </div>
 
+  <!-- Search Bar -->
+  <div class="mb-3">
+    <div class="input-group">
+      <span class="input-group-text">
+        <i class="bi bi-search"></i>
+      </span>
+      <input type="text" 
+             id="menuSearch" 
+             class="form-control" 
+             placeholder="Search menu items... (e.g., burger, pizza, shawarma)"
+             autocomplete="off">
+      <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+        <i class="bi bi-x-lg"></i> Clear
+      </button>
+    </div>
+    <small class="text-muted">
+      <i class="bi bi-info-circle"></i> Tip: Type any part of the item name to filter
+    </small>
+  </div>
+
+  <!-- Menu Accordion -->
   <div class="accordion" id="menuAccordion">
     {% for category, items in menu_by_category.items() %}
-    <div class="accordion-item">
+    <div class="accordion-item category-section" data-category="{{ category }}">
       <h2 class="accordion-header" id="heading{{ loop.index }}">
         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
           data-bs-target="#collapse{{ loop.index }}" aria-expanded="false" aria-controls="collapse{{ loop.index }}">
-          {{ category }}
+          <span class="category-name">{{ category }}</span>
+          <span class="badge bg-primary ms-2 category-count">{{ items|length }}</span>
         </button>
       </h2>
       <div id="collapse{{ loop.index }}" class="accordion-collapse collapse"
@@ -73,16 +108,23 @@
         <div class="accordion-body">
           <div class="row">
             {% for item in items %}
-            <div class="col-md-4 mb-2">
-              <div class="card">
+            <div class="col-md-4 col-sm-6 mb-2 menu-item-card" 
+                 data-item-name="{{ item.name|lower }}"
+                 data-category="{{ category }}">
+              <div class="card h-100">
                 <div class="card-body">
-                  <h6 class="card-title">{{ item.name }}</h6>
-                  <p>₹{{ item.price }}</p>
+                  <h6 class="card-title item-name">{{ item.name }}</h6>
+                  <p class="text-success mb-2">₹{{ item.price }}</p>
                   <form method="post">
                     <input type="hidden" name="table_id" value="{{ selected_table.id }}">
                     <input type="hidden" name="item_id" value="{{ item.id }}">
-                    <input type="number" name="qty" value="1" min="1" class="form-control mb-1" style="width:80px;">
-                    <button type="submit" name="add_item" class="btn btn-sm btn-success">Add</button>
+                    <div class="input-group input-group-sm">
+                      <input type="number" name="qty" value="1" min="1" max="99" 
+                             class="form-control" style="max-width:60px;">
+                      <button type="submit" name="add_item" class="btn btn-success btn-sm">
+                        <i class="bi bi-plus-lg"></i> Add
+                      </button>
+                    </div>
                   </form>
                 </div>
               </div>
@@ -94,33 +136,153 @@
     </div>
     {% endfor %}
   </div>
+
+  <!-- No Results Message -->
+  <div id="noResults" class="alert alert-warning mt-3" style="display: none;">
+    <i class="bi bi-exclamation-triangle"></i> No menu items found matching your search.
+  </div>
+  
   {% endif %}
 </div>
 
-<!-- KOT Print Modal (Bootstrap Modal) -->
-<div class="modal fade" id="kotPrintModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header bg-warning">
-        <h5 class="modal-title">🍳 KOT Ready to Print</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body text-center">
-        <p class="mb-3">Tap the button to send KOT to kitchen printer</p>
-        <button onclick="shareKOT()" class="btn btn-warning btn-lg w-100">
-          <i class="bi bi-printer-fill"></i> Print with RawBT
-        </button>
-        <div id="kotMessage" class="mt-3"></div>
-      </div>
-    </div>
-  </div>
-</div>
+<style>
+/* Highlight matching text */
+.highlight {
+  background-color: yellow;
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* Smooth transitions */
+.menu-item-card {
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.menu-item-card.hidden {
+  display: none !important;
+}
+
+.category-section.hidden {
+  display: none !important;
+}
+
+/* Search bar styling */
+#menuSearch:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Badge animation */
+#searchResultCount {
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+</style>
 
 <script>
-let kotContentToShare = '';
-
 document.addEventListener('DOMContentLoaded', function() {
+  const menuSearch = document.getElementById('menuSearch');
+  const clearSearch = document.getElementById('clearSearch');
+  const menuItems = document.querySelectorAll('.menu-item-card');
+  const categories = document.querySelectorAll('.category-section');
+  const noResults = document.getElementById('noResults');
+  const resultCountBadge = document.getElementById('searchResultCount');
+  const resultCountText = document.getElementById('resultCount');
+
+  // Search functionality
+  function performSearch() {
+    const searchTerm = menuSearch.value.toLowerCase().trim();
+    let visibleCount = 0;
+    let visibleCategories = new Set();
+
+    if (searchTerm === '') {
+      // Show all items and categories
+      menuItems.forEach(item => item.classList.remove('hidden'));
+      categories.forEach(cat => cat.classList.remove('hidden'));
+      noResults.style.display = 'none';
+      resultCountBadge.style.display = 'none';
+      
+      // Remove all highlights
+      document.querySelectorAll('.item-name').forEach(name => {
+        name.innerHTML = name.textContent;
+      });
+      
+      return;
+    }
+
+    // Filter items
+    menuItems.forEach(item => {
+      const itemName = item.getAttribute('data-item-name');
+      const category = item.getAttribute('data-category');
+      const nameElement = item.querySelector('.item-name');
+      
+      if (itemName.includes(searchTerm)) {
+        item.classList.remove('hidden');
+        visibleCount++;
+        visibleCategories.add(category);
+        
+        // Highlight matching text
+        const originalText = nameElement.textContent;
+        const regex = new RegExp(`(${searchTerm})`, 'gi');
+        nameElement.innerHTML = originalText.replace(regex, '<span class="highlight">$1</span>');
+      } else {
+        item.classList.add('hidden');
+        // Remove highlight
+        nameElement.innerHTML = nameElement.textContent;
+      }
+    });
+
+    // Show/hide categories based on visible items
+    categories.forEach(cat => {
+      const categoryName = cat.getAttribute('data-category');
+      if (visibleCategories.has(categoryName)) {
+        cat.classList.remove('hidden');
+        // Auto-expand category with results
+        const collapseElement = cat.querySelector('.accordion-collapse');
+        if (collapseElement && !collapseElement.classList.contains('show')) {
+          const bsCollapse = new bootstrap.Collapse(collapseElement, { toggle: true });
+        }
+      } else {
+        cat.classList.add('hidden');
+      }
+    });
+
+    // Show/hide no results message
+    if (visibleCount === 0) {
+      noResults.style.display = 'block';
+      resultCountBadge.style.display = 'none';
+    } else {
+      noResults.style.display = 'none';
+      resultCountBadge.style.display = 'inline-block';
+      resultCountText.textContent = visibleCount;
+    }
+  }
+
+  // Event listeners
+  menuSearch.addEventListener('input', performSearch);
+  
+  clearSearch.addEventListener('click', function() {
+    menuSearch.value = '';
+    performSearch();
+    menuSearch.focus();
+  });
+
+  // Keyboard shortcut: Ctrl+F or Cmd+F to focus search
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault();
+      menuSearch.focus();
+    }
+  });
+
+  // Print KOT functionality
   const btnPrintKOT = document.getElementById('btnPrintKOT');
+  const statusDiv = document.getElementById('printStatus');
   
   if (btnPrintKOT) {
     btnPrintKOT.addEventListener('click', function() {
@@ -131,7 +293,8 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       this.disabled = true;
-      this.innerHTML = '⏳ Printing KOT...';
+      this.innerHTML = '⏳ Printing...';
+      statusDiv.innerHTML = '<div class="alert alert-info">📡 Connecting to printer...</div>';
       
       fetch(`/print_kot/${tableId}`, {
         method: 'POST',
@@ -140,62 +303,24 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          if (data.kot_content) {
-            // Store KOT content and show modal
-            kotContentToShare = data.kot_content;
-            const modal = new bootstrap.Modal(document.getElementById('kotPrintModal'));
-            modal.show();
-          } else {
-            alert('✅ ' + data.message);
-          }
+          statusDiv.innerHTML = '<div class="alert alert-success">✅ ' + data.message + '</div>';
+          setTimeout(() => {
+            statusDiv.innerHTML = '';
+          }, 3000);
         } else {
-          alert('❌ ' + data.message);
+          statusDiv.innerHTML = '<div class="alert alert-danger">❌ ' + data.message + '</div>';
         }
       })
       .catch(err => {
-        alert('❌ Failed to print KOT: ' + err.message);
+        console.error('Print error:', err);
+        statusDiv.innerHTML = '<div class="alert alert-danger">❌ Failed to print: ' + err.message + '</div>';
       })
       .finally(() => {
         this.disabled = false;
-        this.innerHTML = 'Print KOT';
+        this.innerHTML = '🖨️ Print KOT';
       });
     });
   }
 });
-
-async function shareKOT() {
-  const messageDiv = document.getElementById('kotMessage');
-  
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: 'Kitchen Order Ticket',
-        text: kotContentToShare
-      });
-      
-      messageDiv.innerHTML = '<div class="alert alert-success">✅ KOT sent to printer!</div>';
-      
-      // Close modal after 1 second
-      setTimeout(() => {
-        bootstrap.Modal.getInstance(document.getElementById('kotPrintModal')).hide();
-        messageDiv.innerHTML = '';
-      }, 1000);
-      
-    } else {
-      await navigator.clipboard.writeText(kotContentToShare);
-      messageDiv.innerHTML = '<div class="alert alert-info">📋 KOT copied to clipboard!<br>Open RawBT and paste to print.</div>';
-    }
-  } catch (error) {
-    if (error.name !== 'AbortError') {
-      console.error('Share error:', error);
-      try {
-        await navigator.clipboard.writeText(kotContentToShare);
-        messageDiv.innerHTML = '<div class="alert alert-info">📋 KOT copied to clipboard!<br>Open RawBT and paste to print.</div>';
-      } catch (e) {
-        messageDiv.innerHTML = '<div class="alert alert-danger">⚠️ Unable to share or copy.</div>';
-      }
-    }
-  }
-}
 </script>
 {% endblock %}
