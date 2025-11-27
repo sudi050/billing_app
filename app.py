@@ -545,48 +545,50 @@ def print_preview():
 def waiter():
     if current_user.role not in ['admin', 'waiter']:
         return redirect(url_for('index'))
-
+    
     tables = Table.query.order_by(Table.table_no).all()
     selected_table_id = request.args.get('table_id', type=int)
     selected_table = None
     active_order = None
     cart = []
-
+    
     if selected_table_id:
         selected_table = Table.query.get(selected_table_id)
         if selected_table and selected_table.current_order_id:
             active_order = Order.query.get(selected_table.current_order_id)
             cart = json.loads(active_order.items) if active_order and active_order.items else []
-
+    
     menu_items = MenuItem.query.filter_by(available=True).order_by(MenuItem.category, MenuItem.name).all()
     menu_by_category = {}
     for item in menu_items:
-        cat = item.category or "Uncategorized"
+        cat = item.category or 'Uncategorized'
         menu_by_category.setdefault(cat, []).append(item)
-
+    
     # --- Add item ---
     if request.method == 'POST' and 'add_item' in request.form:
         try:
+            # FIX: Use underscores to match HTML form field names
             table_id = int(request.form['table_id'])
             item_id = int(request.form['item_id'])
             qty = int(request.form.get('qty', 1))
-
+            
             # Validate quantity
             if qty <= 0 or qty > 100:
-                flash("Invalid quantity. Please enter between 1-100.", "danger")
-                return redirect(url_for('waiter'))
-
+                flash('Invalid quantity. Please enter between 1-100.', 'danger')
+                return redirect(url_for('waiter', table_id=table_id))
+            
             table = Table.query.get(table_id)
             item = MenuItem.query.get(item_id)
-
+            
             if not table or not item:
-                flash("Invalid selection", "danger")
-                return redirect(url_for('waiter'))
-
+                flash('Invalid selection', 'danger')
+                return redirect(url_for('waiter', table_id=table_id))
+            
+            # Create order if not exists
             if not table.current_order_id:
                 last_order = Order.query.order_by(Order.order_number.desc()).first()
                 next_order_number = 1001 if not last_order else last_order.order_number + 1
-
+                
                 order = Order(
                     uuid=str(uuid.uuid4()),
                     order_number=next_order_number,
@@ -594,16 +596,16 @@ def waiter():
                     items=json.dumps([]),
                     status='pending'
                 )
-
                 db.session.add(order)
                 db.session.flush()
+                
                 table.current_order_id = order.id
                 table.locked = True
                 table.status = 'occupied'
-
+            
             order = Order.query.get(table.current_order_id)
             cart = json.loads(order.items) if order.items else []
-
+            
             # Update qty or add
             item_found = False
             for c in cart:
@@ -611,7 +613,7 @@ def waiter():
                     c['qty'] += qty
                     item_found = True
                     break
-
+            
             if not item_found:
                 cart.append({
                     'id': item.id,
@@ -620,63 +622,63 @@ def waiter():
                     'qty': qty,
                     'category': item.category
                 })
-
-
+            
             order.items = json.dumps(cart)
             order.coupon_code = None
             order.discount_amount = 0.0
-
+            
             db.session.add(Log(
                 username=current_user.username,
                 role=current_user.role,
                 action=f"Added {item.name} x{qty} to table {table.table_no}"
             ))
             db.session.commit()
-
-            flash(f"Added {qty}x {item.name} to Table {table.table_no}", "success")
+            
+            flash(f'Added {qty}x {item.name} to Table {table.table_no}', 'success')
             return redirect(url_for('waiter', table_id=table.id))
-
-
+            
         except ValueError:
-            flash("Invalid input values", "danger")
-            return redirect(url_for('waiter'))
+            flash('Invalid input values', 'danger')
+            return redirect(url_for('waiter', table_id=selected_table_id))
         except Exception as e:
             db.session.rollback()
-            flash(f"Error adding item: {str(e)}", "danger")
-            return redirect(url_for('waiter'))
-
+            flash(f'Error adding item: {str(e)}', 'danger')
+            return redirect(url_for('waiter', table_id=selected_table_id))
+    
     # --- Remove item ---
     if request.method == 'POST' and 'remove_item' in request.form:
         try:
+            # FIX: Use underscores
             table_id = int(request.form['table_id'])
             item_id = int(request.form['remove_item'])
-
+            
             table = Table.query.get(table_id)
             if not table or not table.current_order_id:
-                flash("No active order found", "danger")
+                flash('No active order found', 'danger')
                 return redirect(url_for('waiter'))
-
+            
             order = Order.query.get(table.current_order_id)
             cart = [c for c in json.loads(order.items) if c['id'] != item_id]
+            
             order.items = json.dumps(cart)
-
             order.coupon_code = None
             order.discount_amount = 0.0
-
+            
             db.session.commit()
-            flash("Item removed", "info")
+            flash('Item removed', 'info')
             return redirect(url_for('waiter', table_id=table.id))
-
+            
         except Exception as e:
             db.session.rollback()
-            flash(f"Error removing item: {str(e)}", "danger")
+            flash(f'Error removing item: {str(e)}', 'danger')
             return redirect(url_for('waiter'))
-
+    
     return render_template('waiter.html',
-                           tables=tables,
-                           selected_table=selected_table,
-                           cart=cart,
-                           menu_by_category=menu_by_category)
+                         tables=tables,
+                         selected_table=selected_table,
+                         cart=cart,
+                         menu_by_category=menu_by_category)
+
 
 
 # -------------------- KITCHEN SECTION --------------------
