@@ -11,8 +11,8 @@ PRINT_DIR = "/storage/emulated/0/Download/RestaurantPrints"
 # ========== CORE PRINTING FUNCTION ==========
 def print_bluetooth_rawbt(text_content):
     """
-    Save to file and open with RawBT via termux-share.
-    No python-escpos needed - works 100% in Termux!
+    Save file and send notification with tap action.
+    User taps notification → Opens RawBT → Prints automatically!
     
     Returns:
         (success: bool, message: str)
@@ -21,12 +21,12 @@ def print_bluetooth_rawbt(text_content):
         # Create directory
         os.makedirs(PRINT_DIR, exist_ok=True)
         
-        # Generate filename
+        # Generate filename with timestamp
         timestamp = datetime.now().strftime('%H%M%S')
-        filename = f"print_{timestamp}.txt"
+        filename = f"KOT_{timestamp}.txt"
         filepath = os.path.join(PRINT_DIR, filename)
         
-        # Save content
+        # Save content to file
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(text_content)
         
@@ -35,16 +35,35 @@ def print_bluetooth_rawbt(text_content):
         
         print(f"✅ Saved: {filepath}")
         
-        # Open with termux-share (shows RawBT in share menu)
+        # Send notification with tap action
         try:
-            subprocess.Popen(['termux-share', filepath])
-            return True, "📱 Share menu opening - Select RawBT"
+            subprocess.Popen([
+                'termux-notification',
+                '--id', 'print_job',
+                '--title', '🖨️ Print Ready',
+                '--content', f'Tap to print {filename}',
+                '--action', f'termux-open "{filepath}"',
+                '--priority', 'high',
+                '--sound'
+            ])
+            print("✅ Notification sent")
+            return True, "📱 Notification sent - Tap to print"
         except FileNotFoundError:
-            print("⚠️  termux-share not found")
-            return True, f"📄 File saved: {filename}\nOpen manually with RawBT"
+            print("⚠️  termux-notification not found")
+            # Fallback to termux-open
+            try:
+                subprocess.Popen(['termux-open', filepath])
+                return True, "📱 Opening with RawBT"
+            except:
+                return True, f"📄 File saved: {filename}\nOpen manually"
         except Exception as e:
-            print(f"⚠️  termux-share error: {e}")
-            return True, f"📄 File saved: {filename}\nOpen manually with RawBT"
+            print(f"⚠️  Notification error: {e}")
+            # Fallback to termux-open
+            try:
+                subprocess.Popen(['termux-open', filepath])
+                return True, "📱 Opening with RawBT"
+            except:
+                return True, f"📄 File saved: {filename}\nOpen manually"
         
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -87,7 +106,7 @@ def format_kot_content(order, items):
 
 
 def print_kot_rawbt(kot_content, kitchen_number, order_number=None):
-    """Print KOT via RawBT"""
+    """Print KOT via notification"""
     print(f"\n{'='*50}")
     print(f"🍳 PRINTING KOT - Kitchen {kitchen_number} - Order #{order_number}")
     print(f"{'='*50}")
@@ -144,7 +163,7 @@ def format_bill_content(bill_data):
 
 
 def print_bill_rawbt(bill_content, bill_id):
-    """Print bill via RawBT"""
+    """Print bill via notification"""
     print(f"\n{'='*50}")
     print(f"💳 PRINTING BILL - Bill #{bill_id}")
     print(f"{'='*50}")
@@ -190,7 +209,6 @@ def print_bill(bill_id):
 
 # ========== PRINT JOB SUPPORT ==========
 def create_kot_print_job(order_id):
-    """Create KOT print job in database"""
     order = Order.query.get(order_id)
     if not order:
         return
@@ -206,7 +224,6 @@ def create_kot_print_job(order_id):
 
 
 def create_bill_print_job(bill_id):
-    """Create bill print job in database"""
     bill = db.session.get(Bill, bill_id)
     if not bill:
         return
@@ -240,69 +257,21 @@ def create_bill_print_job(bill_id):
 # ========== TEST ==========
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🖨️  RAWBT PRINTER TEST")
+    print("🖨️  NOTIFICATION-BASED PRINTER TEST")
     print("="*60)
-    print(f"\n📁 Save location: {PRINT_DIR}")
     
-    # Test KOT
-    print("\n📝 TEST 1: Kitchen Order Ticket")
-    test_kot = """*** KITCHEN ORDER TICKET ***
-================================
-Order #: 123
-Table: 5
-Time: 14:30:25
-================================
-
-QTY  ITEM
---------------------------------
-2    Burger
-1    Fries
-3    Coke
-
-================================
-*** PREPARE THIS ORDER ***
+    test_content = """*** TEST PRINT ***
+Notification Method
+Tap notification to print!
 
 
 """
     
-    s1, m1 = print_bluetooth_rawbt(test_kot)
-    print(f"\n{'✅' if s1 else '❌'} Result: {m1}")
+    success, msg = print_bluetooth_rawbt(test_content)
+    print(f"\nResult: {msg}")
     
-    # Test Bill
-    print("\n📝 TEST 2: Restaurant Bill")
-    test_bill = """      RESTAURANT BILL
-================================
-Bill #: 456
-Order #: 888
-Table: A1
-Time: 27-Nov-2025 14:30
-================================
-
-QTY  ITEM              PRICE
---------------------------------
-2    Burger             200.00
-1    Fries               80.00
-2    Coke               100.00
-
---------------------------------
-SUBTOTAL:               380.00
-DISCOUNT (FEST30)       -30.00
-================================
-TOTAL:                  350.00
-================================
-
-    THANK YOU!
-  PLEASE VISIT AGAIN!
-
-
-"""
+    if success:
+        print("\n✅ Check your notification!")
+        print("📱 Tap it to open RawBT and print")
     
-    s2, m2 = print_bluetooth_rawbt(test_bill)
-    print(f"\n{'✅' if s2 else '❌'} Result: {m2}")
-    
-    print("\n" + "="*60)
-    print("✅ TEST COMPLETE!")
-    print("="*60)
-    print("\n📱 If share menu appeared, select RawBT")
-    print("📁 If not, check: Downloads/RestaurantPrints/")
     print("="*60 + "\n")
